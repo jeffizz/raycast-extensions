@@ -13,10 +13,23 @@ export default function Command() {
     async function processClipboard() {
       try {
         const platform = os.platform();
-        const tempImagePath = path.join(environment.supportPath, "clipboard_raw.png");
-        let hasRawImage = false;
+        const tempDir = environment.supportPath;
 
         // ==========================================
+        try {
+          fs.readdirSync(tempDir).forEach((file) => {
+            if (file.startsWith("clipboard_raw_") && file.endsWith(".png")) {
+              fs.unlinkSync(path.join(tempDir, file));
+            }
+          });
+        } catch (gcError) {
+        }
+
+        // ==========================================
+        const uniqueTimestamp = Date.now();
+        const tempImagePath = path.join(tempDir, `clipboard_raw_${uniqueTimestamp}.png`);
+        let hasRawImage = false;
+
         try {
           if (platform === "darwin") {
             const type = execSync(`osascript -e 'get (clipboard info)'`, { encoding: "utf8" });
@@ -64,12 +77,9 @@ export default function Command() {
         // ==========================================
         if (hasRawImage) {
           const fileUriPath = platform === "win32" ? "/" + tempImagePath.replace(/\\/g, '/') : tempImagePath;
-
           const encodedPath = encodeURI(`file://${fileUriPath}`);
 
-          const timestamp = Date.now();
-
-          setMarkdown(`![Raw Clipboard Image](${encodedPath}?t=${timestamp})`);
+          setMarkdown(`![Raw Clipboard Image](${encodedPath})`);
           setIsLoading(false);
           return;
         }
