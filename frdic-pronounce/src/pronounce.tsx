@@ -1,4 +1,5 @@
 import { getSelectedText as getRaycastSelectedText, showHUD } from "@raycast/api";
+import { formatConjugation } from "./conjugation";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { mkdirSync, writeFileSync, existsSync } from "fs";
@@ -56,7 +57,7 @@ export async function pronounceText(raw: string | null, emptyMessage: string): P
 }
 
 export default async function Command() {
-  // Read selected text only. This command never reads the clipboard.
+  // Read selected text through Raycast's native selected-text API.
   let raw: string | null = null;
   try {
     raw = await getRaycastSelectedText();
@@ -64,5 +65,5 @@ export default async function Command() {
     raw = null;
   }
 
-  await pronounceText(raw, "No selected text found — select text first");
+  await pronounceText(formatConjugation(raw ?? "") ?? raw, "No selected text found — select text first");
 }
