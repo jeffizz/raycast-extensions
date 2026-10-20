@@ -1,0 +1,32 @@
+{
+  "$schema": "https://raycast.github.io/templates/v1/package-schema.json",
+  "name": "frdic-pronounce",
+  "title": "French Pronounce (Frdic)",
+  "description": "Pronounce the French word under the cursor via the frdic TTS API.",
+  "icon": "command-icon.png",
+  "author": "you",
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "pronounce",
+      "title": "French Pronounce (Selected Text)",
+      "description": "Play pronunciation of the selected text; never reads the clipboard",
+      "mode": "no-view"
+    },
+    {
+      "name": "pronounce-clipboard",
+      "title": "French Pronounce (Clipboard)",
+      "description": "Play pronunciation of the complete trimmed clipboard text",
+      "mode": "no-view"
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.55.0",
+    "run-script-os": "^1.1.6"
+  },
+  "devDependencies": {
+    "@types/node": "^18.8.0",
+    "@types/react": "^18.0.0",
+    "typescript": "^5.0.0"
+  }
+}
