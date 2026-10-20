@@ -6,6 +6,22 @@
   "icon": "command-icon.png",
   "author": "you",
   "license": "MIT",
+  "preferences": [
+    {
+      "name": "voicename",
+      "title": "English Voice",
+      "description": "Voice used by the English pronunciation commands",
+      "type": "dropdown",
+      "required": true,
+      "default": "en_us_female",
+      "data": [
+        { "title": "English UK — Male", "value": "en_uk_male" },
+        { "title": "English UK — Female", "value": "en_uk_female" },
+        { "title": "English US — Male", "value": "en_us_male" },
+        { "title": "English US — Female", "value": "en_us_female" }
+      ]
+    }
+  ],
   "commands": [
     {
       "name": "pronounce",
@@ -17,6 +33,18 @@
       "name": "pronounce-clipboard",
       "title": "French Pronounce (Clipboard)",
       "description": "Play pronunciation of the complete trimmed clipboard text",
+      "mode": "no-view"
+    },
+    {
+      "name": "pronounce-english",
+      "title": "English Pronounce (Selected Text)",
+      "description": "Play English pronunciation of the selected text",
+      "mode": "no-view"
+    },
+    {
+      "name": "pronounce-english-clipboard",
+      "title": "English Pronounce (Clipboard)",
+      "description": "Play English pronunciation of the clipboard text",
       "mode": "no-view"
     }
   ],

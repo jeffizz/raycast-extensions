@@ -7,7 +7,10 @@
 
 /* eslint-disable @typescript-eslint/ban-types */
 
-type ExtensionPreferences = {}
+type ExtensionPreferences = {
+  /** English Voice - Voice used by the English pronunciation commands */
+  "voicename": "en_uk_male" | "en_uk_female" | "en_us_male" | "en_us_female"
+}
 
 /** Preferences accessible in all the extension's commands */
 declare type Preferences = ExtensionPreferences
@@ -17,6 +20,10 @@ declare namespace Preferences {
   export type Pronounce = ExtensionPreferences & {}
   /** Preferences accessible in the `pronounce-clipboard` command */
   export type PronounceClipboard = ExtensionPreferences & {}
+  /** Preferences accessible in the `pronounce-english` command */
+  export type PronounceEnglish = ExtensionPreferences & {}
+  /** Preferences accessible in the `pronounce-english-clipboard` command */
+  export type PronounceEnglishClipboard = ExtensionPreferences & {}
 }
 
 declare namespace Arguments {
@@ -24,5 +31,9 @@ declare namespace Arguments {
   export type Pronounce = {}
   /** Arguments passed to the `pronounce-clipboard` command */
   export type PronounceClipboard = {}
+  /** Arguments passed to the `pronounce-english` command */
+  export type PronounceEnglish = {}
+  /** Arguments passed to the `pronounce-english-clipboard` command */
+  export type PronounceEnglishClipboard = {}
 }
 
