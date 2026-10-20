@@ -1,8 +1,8 @@
 {
   "$schema": "https://raycast.github.io/templates/v1/package-schema.json",
   "name": "frdic-pronounce",
-  "title": "French Pronounce (Frdic)",
-  "description": "Pronounce the French word under the cursor via the frdic TTS API.",
+  "title": "Frdic Pronounce",
+  "description": "Pronounce French and English text using the frdic TTS API.",
   "icon": "command-icon.png",
   "author": "you",
   "license": "MIT",
@@ -13,7 +13,7 @@
       "description": "Voice used by the English pronunciation commands",
       "type": "dropdown",
       "required": true,
-      "default": "en_us_female",
+      "default": "en_uk_female",
       "data": [
         { "title": "English UK — Male", "value": "en_uk_male" },
         { "title": "English UK — Female", "value": "en_uk_female" },
