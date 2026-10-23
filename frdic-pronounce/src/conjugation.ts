@@ -1,5 +1,22 @@
 const SUBJECTS = ["Je", "Tu", "Il", "Nous", "Vous", "Ils"];
 
+/** Remove one or more parenthesized groups only at the text boundaries. */
+export function stripBoundaryParentheses(raw: string): string {
+  let text = raw.trim();
+
+  // Repeat so `(x)(y)amoureux(euse)(z)` becomes `amoureux`.
+  let previous: string;
+  do {
+    previous = text;
+    text = text
+      .replace(/^(?:\([^()]*\)\s*)+/, "")
+      .replace(/(?:\s*\([^()]*\))+$/, "")
+      .trim();
+  } while (text !== previous);
+
+  return text;
+}
+
 /**
  * Format six or seven tab/newline-separated cells as the frdic conjugation
  * prompt. Seven cells means infinitive plus six forms; six means forms only.

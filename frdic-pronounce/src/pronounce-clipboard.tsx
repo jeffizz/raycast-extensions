@@ -1,5 +1,5 @@
 import { Clipboard, showHUD } from "@raycast/api";
-import { formatConjugation } from "./conjugation";
+import { formatConjugation, stripBoundaryParentheses } from "./conjugation";
 import { pronounceText } from "./pronounce";
 
 /** Pronounce Excel conjugation cells or the complete trimmed clipboard text. */
@@ -16,6 +16,7 @@ export default async function Command() {
     return;
   }
 
-  const conjugation = formatConjugation(raw);
-  await pronounceText(conjugation ?? raw, "No text found in the clipboard");
+  const cleaned = stripBoundaryParentheses(raw);
+  const conjugation = formatConjugation(cleaned);
+  await pronounceText(conjugation ?? cleaned, "No text found in the clipboard");
 }

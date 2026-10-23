@@ -1,5 +1,5 @@
 import { getSelectedText as getRaycastSelectedText, showHUD } from "@raycast/api";
-import { formatConjugation } from "./conjugation";
+import { formatConjugation, stripBoundaryParentheses } from "./conjugation";
 import { playSpeech } from "./speech";
 
 /** Remove only leading and trailing whitespace; preserve the selected text itself. */
@@ -9,7 +9,7 @@ function trimSelectedText(raw: string): string | null {
 }
 
 export async function pronounceText(raw: string | null, emptyMessage: string): Promise<void> {
-  const text = raw ? trimSelectedText(raw) : null;
+  const text = raw ? trimSelectedText(stripBoundaryParentheses(raw)) : null;
   if (!text) {
     await showHUD(emptyMessage);
     return;
@@ -31,5 +31,6 @@ export default async function Command() {
     raw = null;
   }
 
-  await pronounceText(formatConjugation(raw ?? "") ?? raw, "No selected text found — select text first");
+  const cleaned = raw ? stripBoundaryParentheses(raw) : raw;
+  await pronounceText(formatConjugation(cleaned ?? "") ?? cleaned, "No selected text found — select text first");
 }
