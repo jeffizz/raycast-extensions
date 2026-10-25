@@ -66,6 +66,12 @@
       "title": "English Pronounce (Clipboard)",
       "description": "Play English pronunciation of the clipboard text",
       "mode": "no-view"
+    },
+    {
+      "name": "toggle-translation",
+      "title": "Toggle Translation",
+      "description": "Toggle translation toast on or off at runtime",
+      "mode": "no-view"
     }
   ],
   "dependencies": {
