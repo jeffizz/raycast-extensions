@@ -9,7 +9,11 @@
 
 type ExtensionPreferences = {
   /** English Voice - Voice used by the English pronunciation commands */
-  "voicename": "en_uk_male" | "en_uk_female" | "en_us_male" | "en_us_female"
+  "voicename": "en_uk_male" | "en_uk_female" | "en_us_male" | "en_us_female",
+  /** Translation Engine - Optional translation shown as a toast. Choose None to skip translation. */
+  "translationEngine": "none" | "google" | "deepl",
+  /** DeepL API Key - Required only when Translation Engine is DeepL. Free keys usually end with :fx. */
+  "deeplApiKey"?: string
 }
 
 /** Preferences accessible in all the extension's commands */

@@ -20,6 +20,26 @@
         { "title": "English US — Male", "value": "en_us_male" },
         { "title": "English US — Female", "value": "en_us_female" }
       ]
+    },
+    {
+      "name": "translationEngine",
+      "title": "Translation Engine",
+      "description": "Optional translation shown as a toast. Choose None to skip translation.",
+      "type": "dropdown",
+      "required": false,
+      "default": "none",
+      "data": [
+        { "title": "None", "value": "none" },
+        { "title": "Google (free)", "value": "google" },
+        { "title": "DeepL", "value": "deepl" }
+      ]
+    },
+    {
+      "name": "deeplApiKey",
+      "title": "DeepL API Key",
+      "description": "Required only when Translation Engine is DeepL. Free keys usually end with :fx.",
+      "type": "password",
+      "required": false
     }
   ],
   "commands": [

@@ -1,10 +1,5 @@
 import { getSelectedText, showHUD } from "@raycast/api";
-import { playSpeech } from "./speech";
-
-function trimText(raw: string | null): string | null {
-  const text = raw?.trim() ?? "";
-  return text || null;
-}
+import { speakAndMaybeTranslate } from "./workflow";
 
 export default async function Command() {
   let raw: string | null = null;
@@ -14,15 +9,11 @@ export default async function Command() {
     raw = null;
   }
 
-  const text = trimText(raw);
+  const text = raw?.trim() || null;
   if (!text) {
     await showHUD("No selected text found — select text first");
     return;
   }
 
-  try {
-    await playSpeech(text, "en");
-  } catch (error) {
-    await showHUD(`❌ Failed: ${(error as Error).message}`);
-  }
+  await speakAndMaybeTranslate(text, text, "en");
 }

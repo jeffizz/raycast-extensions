@@ -1,4 +1,4 @@
-import { getPreferenceValues } from "@raycast/api";
+import { getPreferences, type VoiceName } from "./preferences";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { mkdirSync, writeFileSync, existsSync } from "fs";
@@ -10,11 +10,7 @@ const FRDIC_PREFIX = "QYN";
 const API = "https://api.frdic.com/api/v2/speech/speakweb";
 
 export type Language = "fr" | "en";
-export type VoiceName = "en_uk_male" | "en_uk_female" | "en_us_male" | "en_us_female";
-
-interface Preferences {
-  voicename: VoiceName;
-}
+export type { VoiceName };
 
 export async function playSpeech(text: string, language: Language, voiceName?: VoiceName): Promise<void> {
   const b64 = Buffer.from(text, "utf-8").toString("base64");
@@ -24,7 +20,7 @@ export async function playSpeech(text: string, language: Language, voiceName?: V
   });
 
   if (language === "en") {
-    const preferences = getPreferenceValues<Preferences>();
+    const preferences = getPreferences();
     params.set("voicename", voiceName ?? preferences.voicename ?? "en_uk_female");
   }
 

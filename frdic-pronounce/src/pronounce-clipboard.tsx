@@ -1,8 +1,7 @@
 import { Clipboard, showHUD } from "@raycast/api";
 import { formatConjugation, stripBoundaryParentheses } from "./conjugation";
-import { pronounceText } from "./pronounce";
+import { speakAndMaybeTranslate } from "./workflow";
 
-/** Pronounce Excel conjugation cells or the complete trimmed clipboard text. */
 export default async function Command() {
   let raw: string | null = null;
   try {
@@ -17,6 +16,10 @@ export default async function Command() {
   }
 
   const cleaned = stripBoundaryParentheses(raw);
-  const conjugation = formatConjugation(cleaned);
-  await pronounceText(conjugation ?? cleaned, "No text found in the clipboard");
+  if (!cleaned) {
+    await showHUD("No text found in the clipboard");
+    return;
+  }
+
+  await speakAndMaybeTranslate(formatConjugation(cleaned) ?? cleaned, cleaned, "fr");
 }
