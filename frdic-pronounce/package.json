@@ -40,6 +40,13 @@
       "description": "Required only when Translation Engine is DeepL. Free keys usually end with :fx.",
       "type": "password",
       "required": false
+    },
+    {
+      "name": "translationToastDurationSeconds",
+      "title": "Translation Toast Duration (Seconds)",
+      "description": "Optional. Leave empty for Raycast default behavior. Valid values are integers from 3 to 30.",
+      "type": "textfield",
+      "required": false
     }
   ],
   "commands": [
