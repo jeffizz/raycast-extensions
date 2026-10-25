@@ -39,7 +39,19 @@ export async function playSpeech(text: string, language: Language, voiceName?: V
 
   if (!existsSync(cacheFile)) {
     const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)" },
+      headers: {
+        Accept: "*/*",
+        "Accept-Encoding": "identity",
+        "Accept-Language": "en, zh-CN;q=0.9, zh;q=0.8",
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache",
+        Referer: "https://www.frdic.com/",
+        "Sec-Fetch-Dest": "audio",
+        "Sec-Fetch-Mode": "no-cors",
+        "Sec-Fetch-Site": "same-site",
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+      },
     });
     if (!res.ok) throw new Error(`frdic API ${res.status}`);
     const buf = Buffer.from(await res.arrayBuffer());
