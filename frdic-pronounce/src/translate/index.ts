@@ -14,6 +14,9 @@ const engines: Record<string, TranslationEngine> = {
   deepl: deeplEngine,
 };
 
+const MIN_TOAST_DURATION_SECONDS = 3;
+const MAX_TOAST_DURATION_SECONDS = 30;
+
 export function getConfiguredEngine(): TranslationEngine | null {
   const { translationEngine } = getPreferences();
   if (!translationEngine || translationEngine === "none") {
@@ -21,6 +24,28 @@ export function getConfiguredEngine(): TranslationEngine | null {
   }
 
   return engines[translationEngine] ?? null;
+}
+
+function getConfiguredToastDurationSeconds(): number | null {
+  const { translationToastDurationSeconds } = getPreferences();
+  const rawValue = translationToastDurationSeconds?.trim();
+
+  if (!rawValue) {
+    return null;
+  }
+
+  const durationSeconds = Number(rawValue);
+  const isValidInteger = Number.isInteger(durationSeconds);
+
+  if (!isValidInteger || durationSeconds < MIN_TOAST_DURATION_SECONDS || durationSeconds > MAX_TOAST_DURATION_SECONDS) {
+    return null;
+  }
+
+  return durationSeconds;
+}
+
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 export async function showTranslationIfEnabled(text: string, source: SourceLanguage): Promise<void> {
@@ -45,8 +70,24 @@ export async function showTranslationIfEnabled(text: string, source: SourceLangu
       target: "zh",
     });
 
-    await showToast({
-      style: Toast.Style.Success,
+    const durationSeconds = getConfiguredToastDurationSeconds();
+
+    if (durationSeconds === null) {
+      await showToast({
+        style: Toast.Style.Success,
+        title: translated,
+        primaryAction: {
+          title: "Copy",
+          onAction: async () => {
+            await Clipboard.copy(translated);
+          },
+        },
+      });
+      return;
+    }
+
+    const toast = await showToast({
+      style: Toast.Style.Animated,
       title: translated,
       primaryAction: {
         title: "Copy",
@@ -55,6 +96,9 @@ export async function showTranslationIfEnabled(text: string, source: SourceLangu
         },
       },
     });
+
+    await sleep(durationSeconds * 1000);
+    toast.hide();
   } catch (error) {
     await showToast({
       style: Toast.Style.Failure,
