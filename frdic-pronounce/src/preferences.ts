@@ -7,6 +7,7 @@ export interface Preferences {
   voicename: VoiceName;
   translationEngine: TranslationEngineId;
   deeplApiKey?: string;
+  translationToastDurationSeconds?: string;
 }
 
 export function getPreferences(): Preferences {
