@@ -1,4 +1,4 @@
-import { Clipboard, showToast, Toast } from "@raycast/api";
+import { Clipboard, showHUD, showToast, Toast } from "@raycast/api";
 import { getPreferences } from "../preferences";
 import { isTranslationEnabled } from "../translation-toggle";
 import { deeplEngine } from "./engines/deepl";
@@ -87,7 +87,7 @@ export async function showTranslationIfEnabled(text: string, source: SourceLangu
     }
 
     const toast = await showToast({
-      style: Toast.Style.Animated,
+      style: Toast.Style.Success,
       title: translated,
       primaryAction: {
         title: "Copy",
@@ -100,10 +100,6 @@ export async function showTranslationIfEnabled(text: string, source: SourceLangu
     await sleep(durationSeconds * 1000);
     toast.hide();
   } catch (error) {
-    await showToast({
-      style: Toast.Style.Failure,
-      title: "Translation failed",
-      message: (error as Error).message,
-    });
+    await showHUD(`Translation failed: ${(error as Error).message}`);
   }
 }
