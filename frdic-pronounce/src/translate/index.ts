@@ -1,5 +1,6 @@
 import { Clipboard, showToast, Toast } from "@raycast/api";
 import { getPreferences } from "../preferences";
+import { isTranslationEnabled } from "../translation-toggle";
 import { deeplEngine } from "./engines/deepl";
 import { googleEngine } from "./engines/google";
 import type { SourceLanguage, TranslationEngine } from "./types";
@@ -23,6 +24,10 @@ export function getConfiguredEngine(): TranslationEngine | null {
 }
 
 export async function showTranslationIfEnabled(text: string, source: SourceLanguage): Promise<void> {
+  if (!(await isTranslationEnabled())) {
+    return;
+  }
+
   const engine = getConfiguredEngine();
   if (!engine) {
     return;
