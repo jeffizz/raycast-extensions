@@ -28,6 +28,8 @@ declare namespace Preferences {
   export type PronounceEnglish = ExtensionPreferences & {}
   /** Preferences accessible in the `pronounce-english-clipboard` command */
   export type PronounceEnglishClipboard = ExtensionPreferences & {}
+  /** Preferences accessible in the `toggle-translation` command */
+  export type ToggleTranslation = ExtensionPreferences & {}
 }
 
 declare namespace Arguments {
@@ -39,5 +41,7 @@ declare namespace Arguments {
   export type PronounceEnglish = {}
   /** Arguments passed to the `pronounce-english-clipboard` command */
   export type PronounceEnglishClipboard = {}
+  /** Arguments passed to the `toggle-translation` command */
+  export type ToggleTranslation = {}
 }
 
