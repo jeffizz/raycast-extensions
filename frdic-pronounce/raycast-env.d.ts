@@ -13,7 +13,9 @@ type ExtensionPreferences = {
   /** Translation Engine - Optional translation shown as a toast. Choose None to skip translation. */
   "translationEngine": "none" | "google" | "deepl",
   /** DeepL API Key - Required only when Translation Engine is DeepL. Free keys usually end with :fx. */
-  "deeplApiKey"?: string
+  "deeplApiKey"?: string,
+  /** Translation Toast Duration (Seconds) - Optional. Leave empty for Raycast default behavior. Valid values are integers from 3 to 30. */
+  "translationToastDurationSeconds"?: string
 }
 
 /** Preferences accessible in all the extension's commands */
