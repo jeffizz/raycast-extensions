@@ -16,6 +16,18 @@ const engines: Record<string, TranslationEngine> = {
 
 const MIN_TOAST_DURATION_SECONDS = 3;
 const MAX_TOAST_DURATION_SECONDS = 30;
+const MAX_TRANSLATION_TITLE_LENGTH = 35;
+
+function getTranslationToastContent(translated: string): { title: string; message?: string } {
+  if (Array.from(translated).length <= MAX_TRANSLATION_TITLE_LENGTH) {
+    return { title: translated };
+  }
+
+  return {
+    title: "Translation",
+    message: translated,
+  };
+}
 
 export function getConfiguredEngine(): TranslationEngine | null {
   const { translationEngine } = getPreferences();
@@ -69,13 +81,14 @@ export async function showTranslationIfEnabled(text: string, source: SourceLangu
       source,
       target: "zh",
     });
+    const toastContent = getTranslationToastContent(translated);
 
     const durationSeconds = getConfiguredToastDurationSeconds();
 
     if (durationSeconds === null) {
       await showToast({
         style: Toast.Style.Success,
-        title: translated,
+        ...toastContent,
         primaryAction: {
           title: "Copy",
           onAction: async () => {
@@ -88,7 +101,7 @@ export async function showTranslationIfEnabled(text: string, source: SourceLangu
 
     const toast = await showToast({
       style: Toast.Style.Animated,
-      title: translated,
+      ...toastContent,
       primaryAction: {
         title: "Copy",
         onAction: async () => {
