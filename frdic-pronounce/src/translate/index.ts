@@ -19,13 +19,15 @@ const MAX_TOAST_DURATION_SECONDS = 30;
 const MAX_TRANSLATION_TITLE_LENGTH = 35;
 
 function getTranslationToastContent(translated: string): { title: string; message?: string } {
-  if (Array.from(translated).length <= MAX_TRANSLATION_TITLE_LENGTH) {
+  const translatedCharacters = Array.from(translated);
+
+  if (translatedCharacters.length <= MAX_TRANSLATION_TITLE_LENGTH) {
     return { title: translated };
   }
 
   return {
-    title: "Translation",
-    message: translated,
+    title: translatedCharacters.slice(0, MAX_TRANSLATION_TITLE_LENGTH).join(""),
+    message: translatedCharacters.slice(MAX_TRANSLATION_TITLE_LENGTH).join(""),
   };
 }
 
