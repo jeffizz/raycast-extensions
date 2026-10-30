@@ -22,9 +22,21 @@
       ]
     },
     {
+      "name": "pronunciationEnabled",
+      "title": "Pronunciation",
+      "description": "Enable speech playback. When off, only translation runs.",
+      "type": "dropdown",
+      "required": true,
+      "default": "on",
+      "data": [
+        { "title": "On", "value": "on" },
+        { "title": "Off", "value": "off" }
+      ]
+    },
+    {
       "name": "translationEngine",
       "title": "Translation Engine",
-      "description": "Optional translation shown as a toast. Choose None to skip translation.",
+      "description": "Optional translation engine. Choose None to skip translation.",
       "type": "dropdown",
       "required": false,
       "default": "none",
@@ -42,9 +54,21 @@
       "required": false
     },
     {
+      "name": "translationDisplayMode",
+      "title": "Translation Display",
+      "description": "Choose how translation results are shown.",
+      "type": "dropdown",
+      "required": true,
+      "default": "toast",
+      "data": [
+        { "title": "Toast", "value": "toast" },
+        { "title": "Raycast Page", "value": "page" }
+      ]
+    },
+    {
       "name": "translationToastDurationSeconds",
       "title": "Translation Toast Duration (Seconds)",
-      "description": "Optional. Leave empty for Raycast default behavior. Valid values are integers from 3 to 30.",
+      "description": "Only for Toast mode. Leave empty for Raycast default behavior. Valid values are integers from 3 to 30.",
       "type": "textfield",
       "required": false
     }
@@ -77,8 +101,14 @@
     {
       "name": "toggle-translation",
       "title": "Toggle Translation",
-      "description": "Toggle translation toast on or off at runtime",
+      "description": "Toggle translation on or off at runtime",
       "mode": "no-view"
+    },
+    {
+      "name": "show-translation-result",
+      "title": "Show Translation Result",
+      "description": "Internal command used to render translation results in a page",
+      "mode": "view"
     }
   ],
   "dependencies": {

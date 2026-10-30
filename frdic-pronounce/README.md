@@ -25,6 +25,8 @@ A Raycast extension that pronounces French words using the frdic (法语助手) 
 
 - Select text in any app, then use `French Pronounce (Selected Text)`.
 - Use `French Pronounce (Clipboard)` for text already in the clipboard.
-- Use `Toggle Translation` to quickly switch translation toast on/off at runtime (without changing preferences).
+- In preferences, you can disable pronunciation to run translation only.
+- In preferences, `Translation Display` can switch between toast and a Raycast result page (default is toast).
+- Use `Toggle Translation` to quickly switch translation on/off at runtime (without changing preferences).
 - When the clipboard contains six or seven tab/newline-separated single words (for example, cells copied from Excel), the clipboard command formats them as a conjugation prompt: each form except the last gets `?`, and forms are joined with tabs. With seven cells, the first cell is treated as the infinitive and emitted in uppercase with a trailing period.
 - Assign different hotkeys to the two commands.

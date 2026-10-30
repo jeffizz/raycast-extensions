@@ -1,5 +1,5 @@
-import { Clipboard, showToast, Toast } from "@raycast/api";
-import { getPreferences } from "../preferences";
+import { Clipboard, launchCommand, LaunchType, showToast, Toast } from "@raycast/api";
+import { getPreferences, getTranslationDisplayMode } from "../preferences";
 import { isTranslationEnabled } from "../translation-toggle";
 import { deeplEngine } from "./engines/deepl";
 import { googleEngine } from "./engines/google";
@@ -83,6 +83,20 @@ export async function showTranslationIfEnabled(text: string, source: SourceLangu
       source,
       target: "zh",
     });
+    const displayMode = getTranslationDisplayMode();
+
+    if (displayMode === "page") {
+      await launchCommand({
+        name: "show-translation-result",
+        type: LaunchType.UserInitiated,
+        context: {
+          translatedText: translated,
+          sourceLanguage: source,
+        },
+      });
+      return;
+    }
+
     const toastContent = getTranslationToastContent(translated);
 
     const durationSeconds = getConfiguredToastDurationSeconds();
