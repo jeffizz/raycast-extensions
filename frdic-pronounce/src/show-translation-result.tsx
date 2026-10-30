@@ -1,4 +1,5 @@
 import { Action, ActionPanel, Detail, LaunchProps } from "@raycast/api";
+import React from "react";
 import type { SourceLanguage } from "./translate/types";
 
 type CommandLaunchContext = {
