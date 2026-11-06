@@ -3,6 +3,7 @@ import { book } from "./data";
 import { resolveVerb } from "./model";
 
 const KEY = "my-verbs";
+const STATS_KEY = "practice-stats"; // Record<verbName, count>
 
 export async function loadMine() {
   const raw = await LocalStorage.getItem<string>(KEY);
@@ -52,4 +53,30 @@ export function parseMine(text: string) {
 
 export function randomOf(list: string[]) {
   return list[Math.floor(Math.random() * list.length)] ?? "être";
+}
+
+// ===== 练习次数统计 =====
+
+export async function loadStats(): Promise<Record<string, number>> {
+  const raw = await LocalStorage.getItem<string>(STATS_KEY);
+  if (!raw) return {};
+  try {
+    const obj = JSON.parse(raw) as unknown;
+    if (obj && typeof obj === "object") return obj as Record<string, number>;
+    return {};
+  } catch {
+    return {};
+  }
+}
+
+export async function incrementPractice(name: string) {
+  const stats = await loadStats();
+  stats[name] = (stats[name] ?? 0) + 1;
+  await LocalStorage.setItem(STATS_KEY, JSON.stringify(stats));
+  return stats[name];
+}
+
+export async function getPracticeCount(name: string): Promise<number> {
+  const stats = await loadStats();
+  return stats[name] ?? 0;
 }

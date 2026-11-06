@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { book, randomVerb } from "./data";
 import { EditMine } from "./edit-mine";
 import { searchVerbs } from "./model";
-import { loadMine, randomOf } from "./mine";
+import { loadMine, loadStats, randomOf } from "./mine";
 
 export function PickVerb({
   onPick,
@@ -14,13 +14,15 @@ export function PickVerb({
 }) {
   const [query, setQuery] = useState(initialQuery);
   const [mine, setMine] = useState<string[]>([]);
+  const [stats, setStats] = useState<Record<string, number>>({});
   const [selected, setSelected] = useState<string | undefined>();
   const ready = useRef(false);
   const names = useMemo(() => (query.trim() ? searchVerbs(book, query) : book.common), [query]);
 
   useEffect(() => {
-    void loadMine().then((list) => {
+    void Promise.all([loadMine(), loadStats()]).then(([list, s]) => {
       setMine(list);
+      setStats(s);
       setSelected(list[0] ? `mine-${list[0]}` : book.common[0] ? `common-${book.common[0]}` : undefined);
       ready.current = true;
     });
@@ -66,21 +68,39 @@ export function PickVerb({
         if (id) setSelected(id);
       }}
     >
-      {!query.trim() && mine.length > 0 && (
+      {!query.trim() && (
         <List.Section title={`我的 ${mine.length}`}>
-          {mine.map((name) => (
+          {mine.length > 0 ? (
+            mine.map((name) => (
+              <List.Item
+                key={`mine-${name}`}
+                id={`mine-${name}`}
+                title={name}
+                accessories={stats[name] ? [{ text: `${stats[name]} 次` }] : []}
+                actions={
+                  <ActionPanel>
+                    <Action title="打开" icon={Icon.Book} onAction={() => onPick(name)} />
+                    {extra}
+                  </ActionPanel>
+                }
+              />
+            ))
+          ) : (
             <List.Item
-              key={`mine-${name}`}
-              id={`mine-${name}`}
-              title={name}
+              id="mine-empty"
+              title="还没有自定义动词"
+              accessories={[{ text: "编辑我的动词" }]}
               actions={
                 <ActionPanel>
-                  <Action title="打开" icon={Icon.Book} onAction={() => onPick(name)} />
-                  {extra}
+                  <Action.Push
+                    title="编辑我的动词"
+                    icon={Icon.Pencil}
+                    target={<EditMine onSaved={() => void loadMine().then(setMine)} />}
+                  />
                 </ActionPanel>
               }
             />
-          ))}
+          )}
         </List.Section>
       )}
       <List.Section title={query.trim() ? "匹配" : `常用 ${book.common.length}`}>
