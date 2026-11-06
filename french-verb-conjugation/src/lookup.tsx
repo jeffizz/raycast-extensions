@@ -25,7 +25,7 @@ function LookupView({ infinitive, onPick }: { infinitive: string; onPick: (infin
   return (
     <Detail
       navigationTitle={infinitive}
-      markdown={tableMarkdown(infinitive, forms)}
+      markdown={`${tableMarkdown(infinitive, forms)}\n\n---\n\n![Conjugation Reference](conjugation-reference.png)`}
       actions={
         <ActionPanel>
           {lines.map((line) => (
@@ -50,9 +50,7 @@ function LookupView({ infinitive, onPick }: { infinitive: string; onPick: (infin
           <Action
             title="移出我的动词"
             icon={Icon.Minus}
-            onAction={() =>
-              void removeMine(infinitive).then(() => showToast({ style: Toast.Style.Success, title: "已移出我的动词" }))
-            }
+            onAction={() => void removeMine(infinitive).then(() => showToast({ style: Toast.Style.Success, title: "已移出我的动词" }))}
           />
           <Action.Push title="编辑我的动词" icon={Icon.Pencil} target={<EditMine />} />
         </ActionPanel>
