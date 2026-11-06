@@ -1,5 +1,5 @@
-import { Action, ActionPanel, Grid, Icon, showToast, Toast, type LaunchProps } from "@raycast/api";
-import { useRef, useState, type JSX } from "react";
+import { Action, ActionPanel, Grid, Icon, LocalStorage, showToast, Toast, type LaunchProps } from "@raycast/api";
+import { useEffect, useRef, useState, type JSX } from "react";
 import { cellImage, type BoardSlot, type CellStyle } from "./cell-image";
 import { book, hAspire, randomVerb } from "./data";
 import { EditMine } from "./edit-mine";
@@ -14,7 +14,7 @@ import {
   type SpeechLine,
   type VerbForms,
 } from "./model";
-import { addMine, loadMine, randomOf, removeMine } from "./mine";
+import { addMine, incrementPractice, loadMine, randomOf, removeMine } from "./mine";
 import { OpenVerb } from "./open-verb";
 import { playSpeech } from "./speech";
 
@@ -29,6 +29,8 @@ export default function PracticeCommand(props: LaunchProps) {
   );
 }
 
+const LAYOUT_KEY = "practice-layout";
+
 function PracticeGrid({ infinitive, onPick }: { infinitive: string; onPick: (infinitive: string) => void }) {
   const forms = book.verbs[infinitive];
   const start = "c0-0";
@@ -37,7 +39,22 @@ function PracticeGrid({ infinitive, onPick }: { infinitive: string; onPick: (inf
   const [searchText, setSearchText] = useState("");
   const [checked, setChecked] = useState(false);
   const [mode, setMode] = useState<"tenses" | "parts">("tenses");
-  const [layout, setLayout] = useState<"persons" | "tenses">("persons");
+  const [layout, setLayout] = useState<"persons" | "tenses">("tenses");
+
+  // 加载保存的布局
+  useEffect(() => {
+    void LocalStorage.getItem<string>(LAYOUT_KEY).then((saved) => {
+      if (saved === "persons" || saved === "tenses") {
+        setLayout(saved);
+      }
+    });
+  }, []);
+
+  // 保存布局变化
+  const setLayoutPersistent = (newLayout: "persons" | "tenses") => {
+    setLayout(newLayout);
+    void LocalStorage.setItem(LAYOUT_KEY, newLayout);
+  };
   const cursorRef = useRef(cursor);
   const answersRef = useRef(answers);
   const echo = useRef<string | null>(null);
@@ -133,6 +150,8 @@ function PracticeGrid({ infinitive, onPick }: { infinitive: string; onPick: (inf
       if (grade === "ok") ok++;
       else if (grade === "bad") bad++;
     }
+    // 练习次数统计（无论对错都算一次练习）
+    void incrementPractice(infinitive);
     showToast({
       style: bad ? Toast.Style.Failure : Toast.Style.Success,
       title: `已填 ${filled.length}，正确 ${ok}，错误 ${bad}`,
@@ -167,8 +186,7 @@ function PracticeGrid({ infinitive, onPick }: { infinitive: string; onPick: (inf
       <Action
         title={layout === "persons" ? "时态做列" : "人称做列"}
         icon={Icon.AppWindowGrid2x2}
-        shortcut={{ modifiers: ["cmd", "shift"], key: "l" }}
-        onAction={() => setLayout((current) => (current === "persons" ? "tenses" : "persons"))}
+        onAction={() => setLayoutPersistent(layout === "persons" ? "tenses" : "persons")}
       />
       <Action
         title={mode === "tenses" ? "练习分词" : "练习变位"}
@@ -307,7 +325,7 @@ function slotOf(
 function cellText(forms: VerbForms, answers: Record<string, string>, checked: boolean, id: string) {
   const label =
     id === "pp" ? "过去分词" : id === "prp" ? "现在分词" : id.startsWith("c0-") ? (TENSES[Number(id.slice(3))]?.zh ?? "") : "";
-  if (!expectedOf(forms, id)) return { main: "—", label, correct: undefined as string | undefined };
+  if (!expectedOf(forms, id)) return { main: "", label, correct: undefined as string | undefined };
   const raw = (answers[id] ?? "").replace(/\s+/g, " ").trim();
   if (!raw) return { main: "____", label, correct: undefined };
   const expected = expectedOf(forms, id);
