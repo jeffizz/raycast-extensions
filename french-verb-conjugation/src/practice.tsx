@@ -40,6 +40,7 @@ function PracticeGrid({ infinitive, onPick }: { infinitive: string; onPick: (inf
   const [checked, setChecked] = useState(false);
   const [mode, setMode] = useState<"tenses" | "parts">("tenses");
   const [layout, setLayout] = useState<"persons" | "tenses">("tenses");
+  const [showAllAnswers, setShowAllAnswers] = useState(false);
 
   // 加载保存的布局
   useEffect(() => {
@@ -184,6 +185,12 @@ function PracticeGrid({ infinitive, onPick }: { infinitive: string; onPick: (inf
       ))}
       <Action title="清空" icon={Icon.Trash} shortcut={{ modifiers: ["cmd", "shift"], key: "delete" }} onAction={reset} />
       <Action
+        title={showAllAnswers ? "隐藏全部答案" : "显示全部答案"}
+        icon={showAllAnswers ? Icon.EyeDisabled : Icon.Eye}
+        shortcut={{ modifiers: ["cmd", "shift"], key: "h" }}
+        onAction={() => setShowAllAnswers((v) => !v)}
+      />
+      <Action
         title={layout === "persons" ? "时态做列" : "人称做列"}
         icon={Icon.AppWindowGrid2x2}
         onAction={() => setLayoutPersistent(layout === "persons" ? "tenses" : "persons")}
@@ -240,7 +247,7 @@ function PracticeGrid({ infinitive, onPick }: { infinitive: string; onPick: (inf
   const byTense = layout === "persons";
 
   function renderItem(id: string) {
-    const slot = slotOf(forms!, answers, checked, cursor, id);
+    const slot = slotOf(forms!, answers, checked, cursor, id, showAllAnswers);
     return (
       <Grid.Item
         key={id}
@@ -317,20 +324,29 @@ function slotOf(
   checked: boolean,
   cursor: string,
   id: string,
+  showAllAnswers = false,
 ): BoardSlot {
-  const text = cellText(forms, answers, checked, id);
-  return { ...text, style: cellStyle(forms, answers, checked, cursor, id) };
+  const text = cellText(forms, answers, checked, id, showAllAnswers);
+  return { ...text, style: cellStyle(forms, answers, checked, cursor, id, showAllAnswers) };
 }
 
-function cellText(forms: VerbForms, answers: Record<string, string>, checked: boolean, id: string) {
+function cellText(forms: VerbForms, answers: Record<string, string>, checked: boolean, id: string, showAllAnswers = false) {
   const label =
     id === "pp" ? "过去分词" : id === "prp" ? "现在分词" : id.startsWith("c0-") ? (TENSES[Number(id.slice(3))]?.zh ?? "") : "";
   if (!expectedOf(forms, id)) return { main: "", label, correct: undefined as string | undefined };
   const raw = (answers[id] ?? "").replace(/\s+/g, " ").trim();
-  if (!raw) return { main: "____", label, correct: undefined };
+  if (!raw) {
+    if (showAllAnswers) {
+      return { main: showForms(expectedOf(forms, id)), label, correct: undefined };
+    }
+    return { main: "____", label, correct: undefined };
+  }
   const expected = expectedOf(forms, id);
   if (checked && expected && gradeAnswer(expected, raw) === "bad") {
     return { main: raw, label, correct: showForms(expected) };
+  }
+  if (showAllAnswers) {
+    return { main: showForms(expected), label, correct: undefined };
   }
   return { main: raw, label, correct: undefined };
 }
@@ -341,9 +357,11 @@ function cellStyle(
   checked: boolean,
   cursor: string,
   id: string,
+  showAllAnswers = false,
 ): CellStyle {
   if (!expectedOf(forms, id)) return "na";
   const raw = (answers[id] ?? "").trim();
+  if (showAllAnswers) return "header";
   if (checked && raw) return gradeAnswer(expectedOf(forms, id), raw) === "bad" ? "bad" : "ok";
   if (cursor === id) return "selected";
   return "plain";
