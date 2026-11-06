@@ -104,7 +104,7 @@ function paintCell(pixels: Uint8Array, slot: BoardSlot, x: number, y: number, w:
   const gap = Math.max(3, Math.round(h * 0.03));
   const labelH = slot.label ? Math.round(h * 0.13) : 0;
   const answerH = Math.round(h * 0.26);
-  const correctH = slot.correct ? Math.round(h * 0.22) : 0;
+  const correctH = slot.correct ? Math.round(h * 0.26) : 0;
   const block = labelH + (labelH ? gap : 0) + answerH + (correctH ? gap + correctH : 0);
   let top = y + Math.max(gap, Math.round((h - block) / 2));
   const labelColor: Rgb = slot.style === "selected" ? [214, 226, 220] : [118, 126, 122];
