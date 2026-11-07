@@ -17,6 +17,8 @@ declare namespace Preferences {
   export type Lookup = ExtensionPreferences & {}
   /** Preferences accessible in the `practice` command */
   export type Practice = ExtensionPreferences & {}
+  /** Preferences accessible in the `practice-mine` command */
+  export type PracticeMine = ExtensionPreferences & {}
 }
 
 declare namespace Arguments {
@@ -24,5 +26,7 @@ declare namespace Arguments {
   export type Lookup = {}
   /** Arguments passed to the `practice` command */
   export type Practice = {}
+  /** Arguments passed to the `practice-mine` command */
+  export type PracticeMine = {}
 }
 
