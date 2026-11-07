@@ -15,12 +15,13 @@ Raycast 扩展：**French Verbs**（manifest `name`: `french-verbs`）。
 - **依赖**：仅 `@raycast/api`（runtime）；开发依赖 TypeScript / React types
 - **无扩展 Preferences**（`raycast-env.d.ts` 中 `ExtensionPreferences = {}`）
 
-两个用户可见命令：
+三个用户可见命令：
 
 | 命令文件 | manifest name | 标题 | 模式 | 作用 |
 | --- | --- | --- | --- | --- |
 | `src/lookup.tsx` | `lookup` | **Conjugate** | view | 查变位表 + 分时态朗读 |
-| `src/practice.tsx` | `practice` | **Practice** | view | 格子填空练习 + 检查 |
+| `src/practice.tsx` | `practice` | **Practice** | view | 单动词格子填空练习 + 检查 |
+| `src/practice-mine.tsx` | `practice-mine` | **Practice My Verbs** | view | 我的动词逐页练习同一个时态或分词 |
 
 本地文件夹名是 `french-verb-conjugation`，扩展 id/name 是 `french-verbs`，两者不要混用。
 
@@ -40,7 +41,9 @@ french-verb-conjugation/
 │   └── icon@dark.png     # Raycast 图标必须在 assets/
 └── src/
     ├── lookup.tsx        # Conjugate 命令入口
-    ├── practice.tsx      # Practice 命令入口
+    ├── practice.tsx      # 单动词 Practice 命令入口
+    ├── practice-mine.tsx # 多动词 Practice My Verbs 命令入口
+    ├── practice-mine-model.ts # 多动词分页和格子模型
     ├── open-verb.tsx     # 启动：解析上下文 → 选词 → 渲染命令视图
     ├── pick-verb.tsx     # 动词选择列表（我的 / 常用 / 搜索）
     ├── edit-mine.tsx     # 编辑「我的动词」表单
@@ -235,12 +238,21 @@ type Cell = string[] | null; // null = 无此形（命令式 je/il/ils 等）；
 - 用 `lock` / `echo` ref 避免 Grid 选中与 searchText 回写打架（120ms lock）。
 - **回车**：同一时态向下换人；人满则下一时态 je；再循环。分词模式在 pp/prp 间切。
 - **`⌘↩`**：检查已填格；空格不记分；错格 `correct` 红字显示标准形。
-- **布局** `⌘⇧L`：人称做列 ↔ 时态做列（`layout`: `persons` | `tenses`）。
+- **布局**：从 Actions 手动切换人称做列 ↔ 时态做列（`layout`: `persons` | `tenses`），没有绑定快捷键。
 - **模式** `⌘⇧P`：练习变位 ↔ 练习分词（`mode`: `tenses` | `parts`）。
 - **清空** `⌘⇧⌫`。
 - 随机我的 / 常用 / 全部；加入/移出/编辑我的。
 - 格子内容：`cellImage(...)` 生成的 PNG 路径。
 - 仅第一人称行（`c0-*`）在图上显示时态中文 label；分词显示「过去分词/现在分词」。
+
+### `practice-mine.tsx`（Practice My Verbs）
+
+- 加载 `loadMine()`，为空时通过 `EditMine` 引导设置；动词做列每页最多 6 个，人称做列每页最多 5 个。
+- `⌘0` 分词、`⌘1`–`⌘6` 六个时态；`⌘⇧S` 朗读当前格所属动词的当前时态/分词；`⌘⇧[` / `⌘⇧]` 翻页。
+- `⌘↩` 检查当前页，给当前页有填写的每个动词各增加一次次数；`⌘⇧H` 预览答案，不覆盖输入；清空只影响当前页当前时态。
+- 默认动词做列、人称做行；另一布局人称做列。独立偏好 `practice-mine-layout` 仍使用 `tenses` 表示动词做列、`persons` 表示人称做列。切换布局时重新计算包含当前动词的页面。
+- 每个格的 key 包含动词、时态/分词和人称；切换时态、页面、布局保留本次会话输入，退出命令后不保存。
+- 分页、布局和数据索引等纯函数见 `practice-mine-model.ts`；回归测试见 `tests/practice-mine.test.ts`。
 
 ### `cell-image.ts`
 
@@ -331,7 +343,10 @@ type Cell = string[] | null; // null = 无此形（命令式 je/il/ils 等）；
 
 | Key | API | 内容 |
 | --- | --- | --- |
-| `my-verbs` | `LocalStorage` | `string[]`，词库内合法原形 |
+| `my-verbs` | `LocalStorage` | JSON 字符串，保存词库内合法原形列表 |
+| `practice-stats` | `LocalStorage` | JSON 对象，动词到练习次数的映射 |
+| `practice-layout` | `LocalStorage` | 单动词练习布局 |
+| `practice-mine-layout` | `LocalStorage` | 多动词练习布局，默认 `tenses` |
 
 无云同步、无 Raycast Preferences。临时文件（TTS mp3、cell PNG）在系统 tmp，可清。
 

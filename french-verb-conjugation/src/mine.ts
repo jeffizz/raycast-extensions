@@ -69,10 +69,22 @@ export async function loadStats(): Promise<Record<string, number>> {
   }
 }
 
+// Serialize updates within this command process so rapid checks do not overwrite each other.
+let statsWrite: Promise<void> = Promise.resolve();
+
+export function incrementPractices(names: string[]): Promise<Record<string, number>> {
+  const update = statsWrite.then(async () => {
+    const stats = await loadStats();
+    for (const name of new Set(names)) stats[name] = (stats[name] ?? 0) + 1;
+    await LocalStorage.setItem(STATS_KEY, JSON.stringify(stats));
+    return stats;
+  });
+  statsWrite = update.then(() => undefined, () => undefined);
+  return update;
+}
+
 export async function incrementPractice(name: string) {
-  const stats = await loadStats();
-  stats[name] = (stats[name] ?? 0) + 1;
-  await LocalStorage.setItem(STATS_KEY, JSON.stringify(stats));
+  const stats = await incrementPractices([name]);
   return stats[name];
 }
 

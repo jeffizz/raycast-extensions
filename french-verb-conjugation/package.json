@@ -23,6 +23,14 @@
       "mode": "view",
       "subtitle": "Français",
       "icon": "icon.png"
+    },
+    {
+      "name": "practice-mine",
+      "title": "Practice My Verbs",
+      "description": "Practice one tense across your saved verbs",
+      "mode": "view",
+      "subtitle": "Français",
+      "icon": "icon.png"
     }
   ],
   "dependencies": {
