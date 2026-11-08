@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Grid, ActionPanel, Action, showToast, Toast, Icon } from "@raycast/api";
-import { playFrenchSpeech } from "./tts";
+import { playFrenchSpeech, playAudioUrl } from "./tts";
 import { VOCAB_DATA, VocabItem } from "./data/vocabulary";
 import { toFrenchCardinal, toFrenchOrdinal, getFrenchApproximate } from "./utils/numberToFrench";
 
 const CATEGORY_NAMES: Record<string, string> = {
+  alphabet: "🔤 26个字母",
   cardinal: "🔢 基数词",
   ordinal: "🥇 序数词",
   approx: "📦 概数名词",
@@ -40,7 +41,7 @@ function wrapText(text: string, maxCharsPerLine: number = 14): string[] {
   return lines.length > 0 ? lines : [text];
 }
 
-// 普通词汇卡片（文字 + 音标 + 中文）
+// 普通词汇及字母卡片（文字 + 音标 + 中文）
 function cardToSvgDataUrl(french: string, phonetic?: string, chinese?: string): string {
   const frenchLines = wrapText(french, 14);
   const chineseLines = chinese ? wrapText(chinese, 12) : [];
@@ -54,9 +55,9 @@ function cardToSvgDataUrl(french: string, phonetic?: string, chinese?: string): 
   let contentSvg = "";
   let currentY = startY;
 
-  // 法语单词
+  // 法语单词 / 字母 (大字 32pt)
   for (const line of frenchLines) {
-    contentSvg += `<text x="50%" y="${currentY}%" dominant-baseline="middle" text-anchor="middle" font-size="32" font-weight="900" fill="#0F172A" font-family="system-ui, -apple-system, sans-serif">${escapeXml(line)}</text>`;
+    contentSvg += `<text x="50%" y="${currentY}%" dominant-baseline="middle" text-anchor="middle" font-size="34" font-weight="900" fill="#0F172A" font-family="system-ui, -apple-system, sans-serif">${escapeXml(line)}</text>`;
     currentY += 19;
   }
 
@@ -113,11 +114,17 @@ export default function Command() {
   const [searchText, setSearchText] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
-  async function handlePlay(text: string) {
+  async function handlePlay(item: VocabItem) {
     try {
       await showToast({ style: Toast.Style.Animated, title: "正在朗读..." });
-      const cleanText = text.split("/")[0].trim();
-      await playFrenchSpeech(cleanText);
+      if (item.audioUrl) {
+        // 如果存在专有 static-main MP3 文件路径（如 26 个字母），直接请求静态文件
+        await playAudioUrl(item.audioUrl);
+      } else {
+        // 其它单词继续请求 TTS 发音 API
+        const cleanText = item.french.split("/")[0].trim();
+        await playFrenchSpeech(cleanText);
+      }
       await showToast({ style: Toast.Style.Success, title: "朗读完成" });
     } catch (err) {
       await showToast({
@@ -168,10 +175,11 @@ export default function Command() {
       inset={Grid.Inset.Zero}
       searchText={searchText}
       onSearchTextChange={setSearchText}
-      searchBarPlaceholder="搜索词汇，或直接输入数字 (如: 71)..."
+      searchBarPlaceholder="搜索词汇/字母，或直接输入数字 (如: 71)..."
       searchBarAccessory={
         <Grid.Dropdown tooltip="筛选词汇分类" onChange={setCategoryFilter}>
           <Grid.Dropdown.Item title="全部分类" value="all" />
+          <Grid.Dropdown.Item title="🔤 26个字母" value="alphabet" />
           <Grid.Dropdown.Item title="🔢 基数词" value="cardinal" />
           <Grid.Dropdown.Item title="🥇 序数词" value="ordinal" />
           <Grid.Dropdown.Item title="📦 概数名词" value="approx" />
@@ -204,7 +212,7 @@ export default function Command() {
                       <Action
                         title="朗读发音"
                         icon={Icon.SpeakerHigh}
-                        onAction={() => handlePlay(item.french)}
+                        onAction={() => handlePlay(item)}
                       />
                       <Action.CopyToClipboard
                         title="复制法语单词"

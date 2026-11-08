@@ -2,7 +2,7 @@
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "french-vocab-cheat-sheet",
   "title": "French Basics & Numbers",
-  "description": "法语基础词汇速查（数字、序数词、概数名词、月份、星期、颜色）与 TTS 发音",
+  "description": "法语基础词汇速查（26个字母、数字、序数词、概数名词、月份、星期、颜色）与音频朗读",
   "icon": "icon.png",
   "author": "user",
   "categories": [
@@ -14,7 +14,7 @@
     {
       "name": "index",
       "title": "French Basics & Numbers",
-      "description": "网格预览与快速检索法语词汇",
+      "description": "网格预览与快速检索法语词汇与字母",
       "mode": "view"
     }
   ],

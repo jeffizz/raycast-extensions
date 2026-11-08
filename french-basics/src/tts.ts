@@ -46,3 +46,26 @@ export async function playFrenchSpeech(text: string): Promise<void> {
 
   await execFileAsync("/usr/bin/afplay", [cacheFile]);
 }
+
+export async function playAudioUrl(audioUrl: string): Promise<void> {
+  const fileName = audioUrl.split("/").pop() || "audio.mp3";
+  const cacheDir = join(os.tmpdir(), "frdic-cache");
+  const cacheFile = join(cacheDir, fileName);
+
+  mkdirSync(cacheDir, { recursive: true });
+
+  if (!existsSync(cacheFile)) {
+    const res = await fetch(audioUrl, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+      },
+    });
+    if (!res.ok) throw new Error(`Audio fetch failed: ${res.status}`);
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length < 100) throw new Error("Audio file empty");
+    writeFileSync(cacheFile, buf);
+  }
+
+  await execFileAsync("/usr/bin/afplay", [cacheFile]);
+}
