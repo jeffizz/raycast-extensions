@@ -1,30 +1,66 @@
 {
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "french-vocab-cheat-sheet",
-  "title": "French Basics & Numbers",
+  "title": "French Basics",
   "description": "法语基础词汇速查（26个字母内置离线音频、数字、序数词、概数名词、月份、星期、颜色）",
   "icon": "french-basics-icon.png",
   "author": "user",
   "categories": [
-    "Education",
     "Productivity"
   ],
   "license": "MIT",
+  "preferences": [
+    {
+      "name": "deepLApiKey",
+      "type": "password",
+      "title": "DeepL API Key",
+      "description": "可选：用于法语名词查询的 DeepL API Key。",
+      "required": false
+    },
+    {
+      "name": "deepLApiPlan",
+      "type": "dropdown",
+      "title": "DeepL API Plan",
+      "description": "选择与密钥对应的 DeepL API 套餐。",
+      "required": true,
+      "default": "free",
+      "data": [
+        { "title": "API Free", "value": "free" },
+        { "title": "API Pro", "value": "pro" }
+      ]
+    }
+  ],
   "commands": [
     {
       "name": "index",
-      "title": "French Basics & Numbers",
+      "title": "French Basics",
       "description": "网格预览与快速检索法语词汇与字母",
       "icon": "french-basics-icon.png",
       "mode": "view"
+    },
+    {
+      "name": "noun-lookup",
+      "title": "French Noun Lookup",
+      "subtitle": "French Basics",
+      "description": "离线查询法语名词的阴阳性、词形和冠词，可选 DeepL 中文翻译",
+      "icon": "french-basics-icon.png",
+      "mode": "view"
+    },
+    {
+      "name": "speak-selected-noun",
+      "title": "Speak Selected French Noun",
+      "subtitle": "French Basics",
+      "description": "仅读取选中文本，朗读单数不定冠词与名词",
+      "icon": "french-basics-icon.png",
+      "mode": "no-view"
     }
   ],
   "dependencies": {
     "@raycast/api": "^1.80.0"
   },
   "devDependencies": {
-    "@types/node": "20.8.10",
-    "@types/react": "18.2.27",
+    "@types/node": "22.19.17",
+    "@types/react": "19.0.10",
     "typescript": "^5.2.2"
   },
   "scripts": {

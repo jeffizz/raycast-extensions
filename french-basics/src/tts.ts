@@ -1,6 +1,8 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { mkdirSync, writeFileSync, existsSync } from "fs";
+import { existsSync } from "fs";
+import { environment } from "@raycast/api";
+import { cachedSpeech } from "./speech-cache";
 import { join } from "path";
 import os from "os";
 
@@ -15,6 +17,19 @@ export async function playLocalAudio(localPath: string): Promise<void> {
   await execFileAsync("/usr/bin/afplay", [localPath]);
 }
 
+/** Match the frdic conjugation example: a question mark and a literal tab separate items. */
+export function formatFrenchSpeechItems(items: string[]): string {
+  const phrases = items.map((item) => item.trim()).filter(Boolean);
+  if (phrases.some((item) => /[\t\r\n]/.test(item))) throw new Error("发音短语不能包含制表符或换行");
+  return phrases.join("?\t");
+}
+
+export async function playFrenchSpeechItems(items: string[]): Promise<void> {
+  const text = formatFrenchSpeechItems(items);
+  if (!text) throw new Error("没有可朗读的内容");
+  await playFrenchSpeech(text);
+}
+
 export async function playFrenchSpeech(text: string): Promise<void> {
   const b64 = Buffer.from(text, "utf-8").toString("base64");
   const params = new URLSearchParams({
@@ -23,14 +38,12 @@ export async function playFrenchSpeech(text: string): Promise<void> {
   });
 
   const url = `${API}?${params.toString()}`;
-  const cacheDir = join(os.tmpdir(), "frdic-cache");
-  const cacheKey = `fr_default_${b64}`.replace(/\+/g, "-").replace(/\//g, "_");
-  const cacheFile = join(cacheDir, `${cacheKey}.mp3`);
-
-  mkdirSync(cacheDir, { recursive: true });
-
-  if (!existsSync(cacheFile)) {
+  const cacheDir = join(environment.supportPath, "speech-cache");
+  const legacyKey = `fr_default_${b64}`.replace(/\+/g, "-").replace(/\//g, "_");
+  const legacyFile = legacyKey.length < 240 ? join(os.tmpdir(), "frdic-cache", `${legacyKey}.mp3`) : undefined;
+  const cacheFile = await cachedSpeech(cacheDir, text, async () => {
     const res = await fetch(url, {
+      signal: AbortSignal.timeout(15000),
       headers: {
         Accept: "*/*",
         "Accept-Encoding": "identity",
@@ -46,10 +59,8 @@ export async function playFrenchSpeech(text: string): Promise<void> {
       },
     });
     if (!res.ok) throw new Error(`frdic API ${res.status}`);
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length < 100) throw new Error("frdic API returned no audio");
-    writeFileSync(cacheFile, buf);
-  }
+    return new Uint8Array(await res.arrayBuffer());
+  }, legacyFile);
 
   await execFileAsync("/usr/bin/afplay", [cacheFile]);
 }
