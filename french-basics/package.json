@@ -2,7 +2,7 @@
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "french-vocab-cheat-sheet",
   "title": "French Basics & Numbers",
-  "description": "法语基础词汇速查（26个字母、数字、序数词、概数名词、月份、星期、颜色）与音频朗读",
+  "description": "法语基础词汇速查（26个字母内置离线音频、数字、序数词、概数名词、月份、星期、颜色）",
   "icon": "icon.png",
   "author": "user",
   "categories": [

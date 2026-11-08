@@ -4,39 +4,40 @@ export interface VocabItem {
   french: string;
   phonetic?: string;
   chinese: string;
-  audioUrl?: string;
+  localAudioFile?: string;
+  remoteAudioUrl?: string;
   colorHex?: string;
   note?: string;
 }
 
 export const VOCAB_DATA: VocabItem[] = [
-  // --- 26个法语字母 ---
-  { id: "alpha_a", category: "alphabet", french: "Aa", phonetic: "[ɑ]", chinese: "字母 A", audioUrl: "https://static-main.frdic.com/jingting/xwz/a6256bce-59ae-427e-a1e2-496fb7510d54.mp3" },
-  { id: "alpha_b", category: "alphabet", french: "Bb", phonetic: "[be]", chinese: "字母 B", audioUrl: "https://static-main.frdic.com/jingting/xwz/c4c4370d-6694-419d-aee8-9198f2e58d8a.mp3" },
-  { id: "alpha_c", category: "alphabet", french: "Cc", phonetic: "[se]", chinese: "字母 C", audioUrl: "https://static-main.frdic.com/jingting/xwz/a6e081e5-123e-4adb-b068-81b4fe828143.mp3" },
-  { id: "alpha_d", category: "alphabet", french: "Dd", phonetic: "[de]", chinese: "字母 D", audioUrl: "https://static-main.frdic.com/jingting/xwz/101bc261-3c7d-41e2-9690-6126af3376d1.mp3" },
-  { id: "alpha_e", category: "alphabet", french: "Ee", phonetic: "[ə]", chinese: "字母 E", audioUrl: "https://static-main.frdic.com/jingting/xwz/f47cc97c-f3bf-4cbe-95e4-57c29276dbf4.mp3" },
-  { id: "alpha_f", category: "alphabet", french: "Ff", phonetic: "[ɛf]", chinese: "字母 F", audioUrl: "https://static-main.frdic.com/jingting/xwz/9ef4db8a-7505-44e4-968f-c30dd45cdff1.mp3" },
-  { id: "alpha_g", category: "alphabet", french: "Gg", phonetic: "[ʒe]", chinese: "字母 G", audioUrl: "https://static-main.frdic.com/jingting/xwz/e2db7e01-b163-4bf2-bd16-f69e9460bb88.mp3" },
-  { id: "alpha_h", category: "alphabet", french: "Hh", phonetic: "[aʃ]", chinese: "字母 H", audioUrl: "https://static-main.frdic.com/jingting/xwz/2700af11-2449-44ae-bb54-74d3635f6840.mp3" },
-  { id: "alpha_i", category: "alphabet", french: "Ii", phonetic: "[i]", chinese: "字母 I", audioUrl: "https://static-main.frdic.com/jingting/xwz/0d1a6927-c02c-472e-9535-2542cd701424.mp3" },
-  { id: "alpha_j", category: "alphabet", french: "Jj", phonetic: "[ʒi]", chinese: "字母 J", audioUrl: "https://static-main.frdic.com/jingting/xwz/216e6b4b-8aef-406d-9f62-0e141f00a966.mp3" },
-  { id: "alpha_k", category: "alphabet", french: "Kk", phonetic: "[kɑ]", chinese: "字母 K", audioUrl: "https://static-main.frdic.com/jingting/xwz/31cee37f-be7b-4444-9bbc-995f156b5eb1.mp3" },
-  { id: "alpha_l", category: "alphabet", french: "Ll", phonetic: "[ɛl]", chinese: "字母 L", audioUrl: "https://static-main.frdic.com/jingting/xwz/0e3202ad-b2c4-4e7a-810f-1044a97c8e76.mp3" },
-  { id: "alpha_m", category: "alphabet", french: "Mm", phonetic: "[ɛm]", chinese: "字母 M", audioUrl: "https://static-main.frdic.com/jingting/xwz/b311a0fd-58c0-4ebc-a9c6-0717b9b68571.mp3" },
-  { id: "alpha_n", category: "alphabet", french: "Nn", phonetic: "[ɛn]", chinese: "字母 N", audioUrl: "https://static-main.frdic.com/jingting/xwz/243543f5-3104-466c-8a68-867526853350.mp3" },
-  { id: "alpha_o", category: "alphabet", french: "Oo", phonetic: "[o]", chinese: "字母 O", audioUrl: "https://static-main.frdic.com/jingting/xwz/f809961d-6e13-4ce5-85bf-e2eb8e840ac8.mp3" },
-  { id: "alpha_p", category: "alphabet", french: "Pp", phonetic: "[pe]", chinese: "字母 P", audioUrl: "https://static-main.frdic.com/jingting/xwz/fed63125-b144-4762-9a09-80b6d378dabe.mp3" },
-  { id: "alpha_q", category: "alphabet", french: "Qq", phonetic: "[ky]", chinese: "字母 Q", audioUrl: "https://static-main.frdic.com/jingting/xwz/a0f2063c-8668-4da7-bb6d-9b90fd942e0f.mp3" },
-  { id: "alpha_r", category: "alphabet", french: "Rr", phonetic: "[ɛr]", chinese: "字母 R", audioUrl: "https://static-main.frdic.com/jingting/xwz/392738c6-deaf-4332-a5ef-517e0e87f755.mp3" },
-  { id: "alpha_s", category: "alphabet", french: "Ss", phonetic: "[ɛs]", chinese: "字母 S", audioUrl: "https://static-main.frdic.com/jingting/xwz/2205008d-c8b2-4b47-97da-9375a77eeb62.mp3" },
-  { id: "alpha_t", category: "alphabet", french: "Tt", phonetic: "[te]", chinese: "字母 T", audioUrl: "https://static-main.frdic.com/jingting/xwz/db9d7337-f538-4c8a-b204-3a8e7f1e44e6.mp3" },
-  { id: "alpha_u", category: "alphabet", french: "Uu", phonetic: "[y]", chinese: "字母 U", audioUrl: "https://static-main.frdic.com/jingting/xwz/9c454cde-f355-4c93-ad70-3b276e449bd2.mp3" },
-  { id: "alpha_v", category: "alphabet", french: "Vv", phonetic: "[ve]", chinese: "字母 V", audioUrl: "https://static-main.frdic.com/jingting/xwz/ae9324a4-0324-4fa2-a661-380e1aeeef61.mp3" },
-  { id: "alpha_w", category: "alphabet", french: "Ww", phonetic: "[dubləve]", chinese: "字母 W", audioUrl: "https://static-main.frdic.com/jingting/xwz/89f2fd70-e561-45eb-9f33-d9080e686cce.mp3" },
-  { id: "alpha_x", category: "alphabet", french: "Xx", phonetic: "[iks]", chinese: "字母 X", audioUrl: "https://static-main.frdic.com/jingting/xwz/6cd09c60-b8c7-4f74-9291-032543cf9768.mp3" },
-  { id: "alpha_y", category: "alphabet", french: "Yy", phonetic: "[igrɛk]", chinese: "字母 Y", audioUrl: "https://static-main.frdic.com/jingting/xwz/5c88188d-ceaa-4952-a1d4-d7ef26757a99.mp3" },
-  { id: "alpha_z", category: "alphabet", french: "Zz", phonetic: "[zɛd]", chinese: "字母 Z", audioUrl: "https://static-main.frdic.com/jingting/xwz/d3549da4-5850-48a7-a2fc-0f2792c4123c.mp3" },
+  // --- 26个法语字母（内置本地 MP3 音频 + 备用 URL）---
+  { id: "alpha_a", category: "alphabet", french: "Aa", phonetic: "[ɑ]", chinese: "字母 A", localAudioFile: "assets/audio/a.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/a6256bce-59ae-427e-a1e2-496fb7510d54.mp3" },
+  { id: "alpha_b", category: "alphabet", french: "Bb", phonetic: "[be]", chinese: "字母 B", localAudioFile: "assets/audio/b.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/c4c4370d-6694-419d-aee8-9198f2e58d8a.mp3" },
+  { id: "alpha_c", category: "alphabet", french: "Cc", phonetic: "[se]", chinese: "字母 C", localAudioFile: "assets/audio/c.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/a6e081e5-123e-4adb-b068-81b4fe828143.mp3" },
+  { id: "alpha_d", category: "alphabet", french: "Dd", phonetic: "[de]", chinese: "字母 D", localAudioFile: "assets/audio/d.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/101bc261-3c7d-41e2-9690-6126af3376d1.mp3" },
+  { id: "alpha_e", category: "alphabet", french: "Ee", phonetic: "[ə]", chinese: "字母 E", localAudioFile: "assets/audio/e.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/f47cc97c-f3bf-4cbe-95e4-57c29276dbf4.mp3" },
+  { id: "alpha_f", category: "alphabet", french: "Ff", phonetic: "[ɛf]", chinese: "字母 F", localAudioFile: "assets/audio/f.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/9ef4db8a-7505-44e4-968f-c30dd45cdff1.mp3" },
+  { id: "alpha_g", category: "alphabet", french: "Gg", phonetic: "[ʒe]", chinese: "字母 G", localAudioFile: "assets/audio/g.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/e2db7e01-b163-4bf2-bd16-f69e9460bb88.mp3" },
+  { id: "alpha_h", category: "alphabet", french: "Hh", phonetic: "[aʃ]", chinese: "字母 H", localAudioFile: "assets/audio/h.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/2700af11-2449-44ae-bb54-74d3635f6840.mp3" },
+  { id: "alpha_i", category: "alphabet", french: "Ii", phonetic: "[i]", chinese: "字母 I", localAudioFile: "assets/audio/i.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/0d1a6927-c02c-472e-9535-2542cd701424.mp3" },
+  { id: "alpha_j", category: "alphabet", french: "Jj", phonetic: "[ʒi]", chinese: "字母 J", localAudioFile: "assets/audio/j.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/216e6b4b-8aef-406d-9f62-0e141f00a966.mp3" },
+  { id: "alpha_k", category: "alphabet", french: "Kk", phonetic: "[kɑ]", chinese: "字母 K", localAudioFile: "assets/audio/k.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/31cee37f-be7b-4444-9bbc-995f156b5eb1.mp3" },
+  { id: "alpha_l", category: "alphabet", french: "Ll", phonetic: "[ɛl]", chinese: "字母 L", localAudioFile: "assets/audio/l.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/0e3202ad-b2c4-4e7a-810f-1044a97c8e76.mp3" },
+  { id: "alpha_m", category: "alphabet", french: "Mm", phonetic: "[ɛm]", chinese: "字母 M", localAudioFile: "assets/audio/m.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/b311a0fd-58c0-4ebc-a9c6-0717b9b68571.mp3" },
+  { id: "alpha_n", category: "alphabet", french: "Nn", phonetic: "[ɛn]", chinese: "字母 N", localAudioFile: "assets/audio/n.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/243543f5-3104-466c-8a68-867526853350.mp3" },
+  { id: "alpha_o", category: "alphabet", french: "Oo", phonetic: "[o]", chinese: "字母 O", localAudioFile: "assets/audio/o.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/f809961d-6e13-4ce5-85bf-e2eb8e840ac8.mp3" },
+  { id: "alpha_p", category: "alphabet", french: "Pp", phonetic: "[pe]", chinese: "字母 P", localAudioFile: "assets/audio/p.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/fed63125-b144-4762-9a09-80b6d378dabe.mp3" },
+  { id: "alpha_q", category: "alphabet", french: "Qq", phonetic: "[ky]", chinese: "字母 Q", localAudioFile: "assets/audio/q.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/a0f2063c-8668-4da7-bb6d-9b90fd942e0f.mp3" },
+  { id: "alpha_r", category: "alphabet", french: "Rr", phonetic: "[ɛr]", chinese: "字母 R", localAudioFile: "assets/audio/r.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/392738c6-deaf-4332-a5ef-517e0e87f755.mp3" },
+  { id: "alpha_s", category: "alphabet", french: "Ss", phonetic: "[ɛs]", chinese: "字母 S", localAudioFile: "assets/audio/s.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/2205008d-c8b2-4b47-97da-9375a77eeb62.mp3" },
+  { id: "alpha_t", category: "alphabet", french: "Tt", phonetic: "[te]", chinese: "字母 T", localAudioFile: "assets/audio/t.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/db9d7337-f538-4c8a-b204-3a8e7f1e44e6.mp3" },
+  { id: "alpha_u", category: "alphabet", french: "Uu", phonetic: "[y]", chinese: "字母 U", localAudioFile: "assets/audio/u.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/9c454cde-f355-4c93-ad70-3b276e449bd2.mp3" },
+  { id: "alpha_v", category: "alphabet", french: "Vv", phonetic: "[ve]", chinese: "字母 V", localAudioFile: "assets/audio/v.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/ae9324a4-0324-4fa2-a661-380e1aeeef61.mp3" },
+  { id: "alpha_w", category: "alphabet", french: "Ww", phonetic: "[dubləve]", chinese: "字母 W", localAudioFile: "assets/audio/w.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/89f2fd70-e561-45eb-9f33-d9080e686cce.mp3" },
+  { id: "alpha_x", category: "alphabet", french: "Xx", phonetic: "[iks]", chinese: "字母 X", localAudioFile: "assets/audio/x.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/6cd09c60-b8c7-4f74-9291-032543cf9768.mp3" },
+  { id: "alpha_y", category: "alphabet", french: "Yy", phonetic: "[igrɛk]", chinese: "字母 Y", localAudioFile: "assets/audio/y.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/5c88188d-ceaa-4952-a1d4-d7ef26757a99.mp3" },
+  { id: "alpha_z", category: "alphabet", french: "Zz", phonetic: "[zɛd]", chinese: "字母 Z", localAudioFile: "assets/audio/z.mp3", remoteAudioUrl: "https://static-main.frdic.com/jingting/xwz/d3549da4-5850-48a7-a2fc-0f2792c4123c.mp3" },
 
   // --- 基数词 ---
   { id: "c1", category: "cardinal", french: "un / une", phonetic: "[œ̃] / [yn]", chinese: "1" },

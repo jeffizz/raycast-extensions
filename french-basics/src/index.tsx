@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Grid, ActionPanel, Action, showToast, Toast, Icon } from "@raycast/api";
-import { playFrenchSpeech, playAudioUrl } from "./tts";
+import { playFrenchSpeech, playLocalOrRemoteAudio } from "./tts";
 import { VOCAB_DATA, VocabItem } from "./data/vocabulary";
 import { toFrenchCardinal, toFrenchOrdinal, getFrenchApproximate } from "./utils/numberToFrench";
+import path from "path";
 
 const CATEGORY_NAMES: Record<string, string> = {
   alphabet: "🔤 26个字母",
@@ -41,7 +42,6 @@ function wrapText(text: string, maxCharsPerLine: number = 14): string[] {
   return lines.length > 0 ? lines : [text];
 }
 
-// 普通词汇及字母卡片（文字 + 音标 + 中文）
 function cardToSvgDataUrl(french: string, phonetic?: string, chinese?: string): string {
   const frenchLines = wrapText(french, 14);
   const chineseLines = chinese ? wrapText(chinese, 12) : [];
@@ -55,20 +55,17 @@ function cardToSvgDataUrl(french: string, phonetic?: string, chinese?: string): 
   let contentSvg = "";
   let currentY = startY;
 
-  // 法语单词 / 字母 (大字 32pt)
   for (const line of frenchLines) {
     contentSvg += `<text x="50%" y="${currentY}%" dominant-baseline="middle" text-anchor="middle" font-size="34" font-weight="900" fill="#0F172A" font-family="system-ui, -apple-system, sans-serif">${escapeXml(line)}</text>`;
     currentY += 19;
   }
 
-  // 音标
   if (safePhonetic) {
     currentY += 2;
     contentSvg += `<text x="50%" y="${currentY}%" dominant-baseline="middle" text-anchor="middle" font-size="20" font-weight="600" fill="#475569" font-family="system-ui, -apple-system, sans-serif">${safePhonetic}</text>`;
     currentY += 19;
   }
 
-  // 中文释义
   if (chineseLines.length > 0) {
     currentY += 2;
     for (const line of chineseLines) {
@@ -84,12 +81,11 @@ function cardToSvgDataUrl(french: string, phonetic?: string, chinese?: string): 
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-// 颜色专属卡片
 function colorCardToSvgDataUrl(french: string, chinese: string, colorHex: string): string {
   const frenchLines = wrapText(french, 14);
 
-  const strokeAttr = (colorHex.toUpperCase() === "#FFFFFF" || colorHex.toUpperCase() === "#E5E7EB") 
-    ? 'stroke="#CBD5E1" stroke-width="4"' 
+  const strokeAttr = (colorHex.toUpperCase() === "#FFFFFF" || colorHex.toUpperCase() === "#E5E7EB")
+    ? 'stroke="#CBD5E1" stroke-width="4"'
     : '';
 
   let contentSvg = "";
@@ -116,16 +112,16 @@ export default function Command() {
 
   async function handlePlay(item: VocabItem) {
     try {
-      await showToast({ style: Toast.Style.Animated, title: "正在朗读..." });
-      if (item.audioUrl) {
-        // 如果存在专有 static-main MP3 文件路径（如 26 个字母），直接请求静态文件
-        await playAudioUrl(item.audioUrl);
+      if (item.localAudioFile) {
+        // 优先零延迟播放 assets/audio/ 本地内置 MP3，若文件尚为空/不存在则回退至 URL
+        const absolutePath = path.join(__dirname, "..", item.localAudioFile);
+        await playLocalOrRemoteAudio(absolutePath, item.remoteAudioUrl);
       } else {
-        // 其它单词继续请求 TTS 发音 API
+        await showToast({ style: Toast.Style.Animated, title: "正在朗读..." });
         const cleanText = item.french.split("/")[0].trim();
         await playFrenchSpeech(cleanText);
+        await showToast({ style: Toast.Style.Success, title: "朗读完成" });
       }
-      await showToast({ style: Toast.Style.Success, title: "朗读完成" });
     } catch (err) {
       await showToast({
         style: Toast.Style.Failure,
