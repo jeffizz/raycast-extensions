@@ -48,12 +48,17 @@ export const VOCAB_DATA: VocabItem[] = [
   { id: "c100000000", category: "cardinal", french: "un milliard", phonetic: "[œ̃.mi.ljaʁ]", chinese: "1 000 000 000 (十亿)" },
 
   // --- 序数词 ---
+  // --- 序数词 ---
   { id: "o1", category: "ordinal", french: "premier / première", phonetic: "[prə.mje] / [prə.mjɛʁ]", chinese: "第一 (1er / 1ère)" },
   { id: "o2", category: "ordinal", french: "deuxième / second", phonetic: "[dø.zjɛm] / [sə.ɡɔ̃]", chinese: "第二 (2e)" },
   { id: "o3", category: "ordinal", french: "troisième", phonetic: "[trwa.zjɛm]", chinese: "第三 (3e)" },
-  { id: "o5", category: "ordinal", french: "cinquième", phonetic: "[sɛ̃.kjɛm]", chinese: "第五" },
-  { id: "o9", category: "ordinal", french: "neuvième", phonetic: "[nø.vjɛm]", chinese: "第九" },
-  { id: "o20", category: "ordinal", french: "vingtième", phonetic: "[vɛ̃.tjɛm]", chinese: "第二十 (20e)" },
+  { id: "o4", category: "ordinal", french: "quatrième", phonetic: "[ka.tri.jɛm]", chinese: "第四 (4e)" },
+  { id: "o5", category: "ordinal", french: "cinquième", phonetic: "[sɛ̃.kjɛm]", chinese: "第五 (5e)" },
+  { id: "o6", category: "ordinal", french: "sixième", phonetic: "[si.zjɛm]", chinese: "第六 (6e)" },
+  { id: "o7", category: "ordinal", french: "septième", phonetic: "[sɛ.tjɛm]", chinese: "第七 (7e)" },
+  { id: "o8", category: "ordinal", french: "huitième", phonetic: "[ɥi.tjɛm]", chinese: "第八 (8e)" },
+  { id: "o9", category: "ordinal", french: "neuvième", phonetic: "[nø.vjɛm]", chinese: "第九 (9e)" },
+  { id: "o10", category: "ordinal", french: "dixième", phonetic: "[di.zjɛm]", chinese: "第十 (10e)" },
 
   // --- 概数名词 ---
   { id: "a10", category: "approx", french: "une dizaine", phonetic: "[yn.di.zɛn]", chinese: "10个左右 / 十几个" },
