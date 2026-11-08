@@ -3,7 +3,7 @@
   "name": "french-vocab-cheat-sheet",
   "title": "French Basics & Numbers",
   "description": "法语基础词汇速查（26个字母内置离线音频、数字、序数词、概数名词、月份、星期、颜色）",
-  "icon": "icon.png",
+  "icon": "french-basics-icon.png",
   "author": "user",
   "categories": [
     "Education",
@@ -15,6 +15,7 @@
       "name": "index",
       "title": "French Basics & Numbers",
       "description": "网格预览与快速检索法语词汇与字母",
+      "icon": "french-basics-icon.png",
       "mode": "view"
     }
   ],
