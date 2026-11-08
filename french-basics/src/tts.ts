@@ -8,33 +8,11 @@ const execFileAsync = promisify(execFile);
 const FRDIC_PREFIX = "QYN";
 const API = "https://api.frdic.com/api/v2/speech/speakweb";
 
-export async function playLocalOrRemoteAudio(localPath: string, remoteUrl?: string): Promise<void> {
-  if (existsSync(localPath)) {
-    await execFileAsync("/usr/bin/afplay", [localPath]);
-    return;
+export async function playLocalAudio(localPath: string): Promise<void> {
+  if (!existsSync(localPath)) {
+    throw new Error(`本地音频缺失: ${localPath}`);
   }
-
-  if (remoteUrl) {
-    const fileName = remoteUrl.split("/").pop() || "audio.mp3";
-    const cacheDir = join(os.tmpdir(), "frdic-cache");
-    const cacheFile = join(cacheDir, fileName);
-
-    mkdirSync(cacheDir, { recursive: true });
-
-    if (!existsSync(cacheFile)) {
-      const res = await fetch(remoteUrl, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
-        },
-      });
-      if (!res.ok) throw new Error(`Audio fetch failed: ${res.status}`);
-      const buf = Buffer.from(await res.arrayBuffer());
-      writeFileSync(cacheFile, buf);
-    }
-
-    await execFileAsync("/usr/bin/afplay", [cacheFile]);
-  }
+  await execFileAsync("/usr/bin/afplay", [localPath]);
 }
 
 export async function playFrenchSpeech(text: string): Promise<void> {

@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Grid, ActionPanel, Action, showToast, Toast, Icon } from "@raycast/api";
-import { playFrenchSpeech, playLocalOrRemoteAudio } from "./tts";
+import { Grid, ActionPanel, Action, showToast, Toast, Icon, environment } from "@raycast/api";
+import { playFrenchSpeech, playLocalAudio } from "./tts";
 import { VOCAB_DATA, VocabItem } from "./data/vocabulary";
 import { toFrenchCardinal, toFrenchOrdinal, getFrenchApproximate } from "./utils/numberToFrench";
 import path from "path";
@@ -113,9 +113,8 @@ export default function Command() {
   async function handlePlay(item: VocabItem) {
     try {
       if (item.localAudioFile) {
-        // 优先零延迟播放 assets/audio/ 本地内置 MP3，若文件尚为空/不存在则回退至 URL
-        const absolutePath = path.join(__dirname, "..", item.localAudioFile);
-        await playLocalOrRemoteAudio(absolutePath, item.remoteAudioUrl);
+        const absolutePath = path.join(environment.assetsPath, item.localAudioFile);
+        await playLocalAudio(absolutePath);
       } else {
         await showToast({ style: Toast.Style.Animated, title: "正在朗读..." });
         const cleanText = item.french.split("/")[0].trim();
