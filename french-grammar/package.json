@@ -1,0 +1,33 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "french-grammar",
+  "title": "French Grammar",
+  "description": "Quickly search and browse French grammar entries with table support",
+  "icon": "icon.png",
+  "author": "jianfeng",
+  "platforms": ["macOS", "Windows"],
+  "categories": ["Education", "Productivity"],
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "index",
+      "title": "French Grammar",
+      "description": "Search French grammar entries",
+      "mode": "view"
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.80.0",
+    "@raycast/utils": "^1.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.8.10",
+    "@types/react": "^18.2.27",
+    "typescript": "^5.2.2"
+  },
+  "scripts": {
+    "build": "ray build -e dist",
+    "dev": "ray develop",
+    "lint": "ray lint"
+  }
+}
