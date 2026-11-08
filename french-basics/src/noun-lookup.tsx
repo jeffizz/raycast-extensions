@@ -68,6 +68,7 @@ export default function Command() {
     let active = true;
     setMatches([]);
     setRelated([]);
+    setSelectedItemId(undefined);
     setDatabaseError("");
     if (!validInput) { setSearching(false); return; }
     setSearching(true);
@@ -75,7 +76,12 @@ export default function Command() {
       try {
         const found = await lookupNoun(environment.assetsPath, cleanQuery!);
         const counterparts = await linkedNouns(environment.assetsPath, found);
-        if (active) { setMatches(found); setRelated(counterparts); }
+        if (active) {
+          const preferred = preferredPhrase(found, cleanQuery!);
+          setSelectedItemId(preferred ? `match-${preferred.entry.id}-${preferred.index}` : undefined);
+          setMatches(found);
+          setRelated(counterparts);
+        }
       } catch (error) {
         if (active) setDatabaseError(error instanceof Error ? error.message : String(error));
       } finally {
@@ -84,10 +90,6 @@ export default function Command() {
     }, 100);
     return () => { active = false; clearTimeout(timer); };
   }, [cleanQuery, validInput]);
-  useEffect(() => {
-    const selected = preferredPhrase(matches, cleanQuery ?? "");
-    setSelectedItemId(selected ? `match-${selected.entry.id}-${selected.index}` : undefined);
-  }, [cleanQuery, matches]);
   const translationTexts = useMemo(() => [...new Set([...matches.map((m) => m.entry), ...related].flatMap(translationInputs))], [matches, related]);
   const translationKey = JSON.stringify(translationTexts);
   const apiKey = preferences.deepLApiKey?.trim();
@@ -175,7 +177,6 @@ export default function Command() {
       isLoading={loadingInput || searching || translating}
       filtering={false}
       selectedItemId={selectedItemId}
-      onSelectionChange={(id) => setSelectedItemId(id ?? undefined)}
     >
       {databaseError ? (
         <List.EmptyView title="无法查询离线名词库" description={databaseError} />

@@ -148,7 +148,19 @@ export function speechForSelection(matches: NounMatch[], input: string, related:
   const counterpartKeys = new Set(selected.flatMap((entry) => [...entry.feminine, ...entry.masculine]));
   const distinctLemmas = new Set(selected.map((entry) => entry.lemma));
   if (distinctLemmas.size > 1 && selected.some((entry) => !selected.every((other) => other.lemma === entry.lemma || [...entry.feminine, ...entry.masculine].includes(other.lemma) || [...other.feminine, ...other.masculine].includes(entry.lemma)))) return [];
-  const entries = knownGender ? selected : [...selected, ...related.filter((entry) => counterpartKeys.has(entry.lemma) || entry.inferredLink)];
+  const relatedEntries = related.filter((entry) => counterpartKeys.has(entry.lemma) || entry.inferredLink);
+  const explicitPlural = /^(?:des|les)\s/.test(raw);
+  const pluralOnly = selected.length > 0 && matches.filter(({ entry }) => eligible.has(entry.id)).every((match) => match.matchedNumbers.length === 1 && match.matchedNumbers[0] === "p");
+  if (explicitPlural || pluralOnly) {
+    const definite = /^les\s/.test(raw);
+    const matchedPlural = candidates.filter(({ phrase }) => phrase.text.startsWith(definite ? "les " : "des ")).map(({ phrase }) => phrase.text);
+    const relatedPlural = explicitPlural ? [] : relatedEntries.flatMap((entry) => articlePhrases(entry).filter((phrase) => phrase.text.startsWith("des ")).map((phrase) => phrase.text));
+    // Plural articles do not show gender, so follow with the attested singular un/une.
+    const singularEntries = explicitPlural ? selected : [...selected, ...relatedEntries];
+    const singular = singularEntries.flatMap((entry) => articlePhrases(entry).filter((phrase) => /^(?:un|une)\s/.test(phrase.text)).map((phrase) => phrase.text));
+    return [...new Set([...matchedPlural, ...relatedPlural, ...singular])];
+  }
+  const entries = knownGender ? selected : [...selected, ...relatedEntries];
   const phrases = entries.flatMap((entry) => articlePhrases(entry)
     .filter((phrase) => /^(?:un|une)\s/.test(phrase.text) && (!knownGender || phrase.text.startsWith(knownGender === "m" ? "un " : "une ")))
     .map((phrase) => phrase.text));

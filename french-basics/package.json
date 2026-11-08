@@ -50,7 +50,7 @@
       "name": "speak-selected-noun",
       "title": "Speak Selected French Noun",
       "subtitle": "French Basics",
-      "description": "仅读取选中文本，朗读单数不定冠词与名词",
+      "description": "仅读取选中文本，按输入单复数朗读名词冠词搭配",
       "icon": "french-basics-icon.png",
       "mode": "no-view"
     }

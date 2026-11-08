@@ -30,7 +30,7 @@ export default async function Command() {
     const related = await linkedNouns(environment.assetsPath, matches);
     const { phrases, ambiguous } = speechPlanForSelection(matches, text, related);
     if (!phrases.length) {
-      await showHUD("没有可靠的单数不定冠词搭配，请使用名词查询");
+      await showHUD("没有可靠的冠词搭配，请使用名词查询");
       return;
     }
     await showHUD(phrases.join(" / ") + (ambiguous ? "（有歧义）" : ""));
