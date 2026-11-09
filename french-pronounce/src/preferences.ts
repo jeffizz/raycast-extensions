@@ -9,6 +9,7 @@ export interface Preferences {
   deeplApiKey?: string;
   translationToastDurationSeconds?: string;
   strictPrivacyChecks?: boolean;
+  randomFrdicPercentage?: string;
   elevenFrenchVoiceId?: string;
   elevenEnglishVoiceId?: string;
   elevenModel?: string;

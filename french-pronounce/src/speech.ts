@@ -4,7 +4,7 @@ import { promisify } from "util";
 import { rm } from "fs/promises";
 import { cachedAudio, readMp3Response } from "./audio-cache";
 import { getElevenConfig, requestElevenAudio } from "./elevenlabs";
-import { getStrategy } from "./strategy";
+import { chooseRandomProvider, getStrategy, parseFrdicPercentage } from "./strategy";
 import { validateText } from "./text-safety";
 
 const execFileAsync = promisify(execFile);
@@ -50,12 +50,17 @@ async function playFile(path: string): Promise<void> {
 }
 
 export async function playSpeech(text: string, language: Language, voiceName?: VoiceName): Promise<void> {
-  const safeText = validateText(text, getPreferences().strictPrivacyChecks !== false);
+  const preferences = getPreferences();
+  const safeText = validateText(text, preferences.strictPrivacyChecks !== false);
   const strategy = await getStrategy();
+  // Draw before cache lookup. Random mode tries only the selected provider.
+  const provider = strategy === "random"
+    ? chooseRandomProvider(parseFrdicPercentage(preferences.randomFrdicPercentage))
+    : strategy;
   let file: string;
-  if (strategy === "elevenlabs") {
+  if (provider === "elevenlabs") {
     file = await elevenAudio(safeText, language);
-  } else if (strategy === "frdic") {
+  } else if (provider === "frdic") {
     file = await frdicAudio(safeText, language, voiceName);
   } else {
     try {

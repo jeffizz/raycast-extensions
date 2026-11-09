@@ -31,7 +31,7 @@ Module._load = function(request, parent, main) {
 const { validateText, characterCount } = require('../src/text-safety.ts');
 const { reserveKey, failKey, reactivateKey, refreshExpiredKeys, COOLDOWN_MS } = require('../src/key-state.ts');
 const { updateKeys } = require('../src/state.ts');
-const { getStrategy, setStrategy, cycleStrategy } = require('../src/strategy.ts');
+const { getStrategy, setStrategy, cycleStrategy, parseFrdicPercentage, chooseRandomProvider } = require('../src/strategy.ts');
 const { requestElevenAudio, getElevenConfig, elevenRequestBody, parseVoiceIds, DEFAULT_VOICES } = require('../src/elevenlabs.ts');
 const { describeElevenError } = require('../src/elevenlabs-errors.ts');
 const { playSpeech } = require('../src/speech.ts');
@@ -74,6 +74,8 @@ test('strategy defaults, cycles and persists', async () => {
   reset(); assert.equal(await getStrategy(), 'fallback');
   assert.equal(await cycleStrategy(), 'frdic');
   assert.equal(await cycleStrategy(), 'elevenlabs');
+  assert.equal(await cycleStrategy(), 'random');
+  assert.equal(await getStrategy(), 'random');
   assert.equal(await cycleStrategy(), 'fallback');
   await setStrategy('elevenlabs'); assert.equal(await getStrategy(), 'elevenlabs');
 });
@@ -271,5 +273,52 @@ test('unknown model ID is sent to API and API rejection follows normal cooldown'
   };
   await assert.rejects(requestElevenAudio('hello', getElevenConfig('en')), /model_not_found/);
   assert.ok((await updateKeys((state) => state.keys))[0].blockedUntil > Date.now());
+});
+test('random percentage defaults, validation and boundaries', () => {
+  assert.equal(parseFrdicPercentage(undefined), 50);
+  assert.equal(parseFrdicPercentage(' '), 50);
+  assert.equal(parseFrdicPercentage(' 25.5 '), 25.5);
+  for (const bad of ['-1', '101', 'NaN', 'Infinity', '1e2', '50%', '0x20']) assert.throws(() => parseFrdicPercentage(bad), /0 to 100/);
+  const original = Math.random;
+  try {
+    Math.random = () => 0; assert.equal(chooseRandomProvider(0), 'elevenlabs');
+    Math.random = () => 0.999999; assert.equal(chooseRandomProvider(100), 'frdic');
+    Math.random = () => 0.2549; assert.equal(chooseRandomProvider(25.5), 'frdic');
+    Math.random = () => 0.255; assert.equal(chooseRandomProvider(25.5), 'elevenlabs');
+  } finally { Math.random = original; }
+});
+test('random provider is selected before cache lookup and caches remain separate', async () => {
+  reset(); await updateKeys((state) => { state.keys = [key('a')]; }); await setStrategy('random');
+  preferences.randomFrdicPercentage = '50'; let sample = 0.1; const oldRandom = Math.random; Math.random = () => sample;
+  const calls = []; global.fetch = async (url) => { calls.push(url); return response(); };
+  try {
+    await playSpeech('random-provider-cache-test', 'fr');
+    sample = 0.9; await playSpeech('random-provider-cache-test', 'fr');
+    assert.equal(calls.length, 2); assert.ok(calls[0].includes('frdic')); assert.ok(calls[1].includes('elevenlabs'));
+    sample = 0.1; await playSpeech('random-provider-cache-test', 'fr');
+    sample = 0.9; await playSpeech('random-provider-cache-test', 'fr');
+    assert.equal(calls.length, 2); assert.equal((await updateKeys((state) => state.keys))[0].requests, 1);
+  } finally { Math.random = oldRandom; }
+});
+test('random provider failure never falls back to the other provider', async () => {
+  reset(); await setStrategy('random'); await updateKeys((state) => { state.keys = [key('a')]; });
+  const calls = []; global.fetch = async (url) => { calls.push(url); return new Response('{}', { status: 503 }); };
+  preferences.randomFrdicPercentage = '100';
+  await assert.rejects(playSpeech('random-frdic-failure-test', 'fr'), /frdic HTTP 503/);
+  assert.equal(calls.length, 1); assert.ok(calls[0].includes('frdic'));
+  preferences.randomFrdicPercentage = '0';
+  await assert.rejects(playSpeech('random-eleven-failure-test', 'en'), /All attempted ElevenLabs keys failed/);
+  assert.equal(calls.length, 2); assert.ok(calls[1].includes('elevenlabs'));
+  assert.ok((await updateKeys((state) => state.keys))[0].blockedUntil > Date.now());
+});
+test('missing ElevenLabs keys fail only when random mode chooses ElevenLabs', async () => {
+  reset(); await setStrategy('random'); global.fetch = async () => response();
+  preferences.randomFrdicPercentage = '100'; await playSpeech('random-no-keys-frdic', 'en');
+  preferences.randomFrdicPercentage = '0'; await assert.rejects(playSpeech('random-no-keys-eleven', 'en'), /No active ElevenLabs keys/);
+});
+test('invalid random percentage is checked only in random mode and before any request', async () => {
+  reset(); preferences.randomFrdicPercentage = '101'; let calls = 0; global.fetch = async () => { calls++; return response(); };
+  await setStrategy('random'); await assert.rejects(playSpeech('random-invalid-percentage', 'fr'), /0 to 100/); assert.equal(calls, 0);
+  await setStrategy('frdic'); await playSpeech('other-mode-invalid-percentage', 'fr'); assert.equal(calls, 1);
 });
 test.after(() => { fs.rmSync(supportPath, { recursive: true, force: true }); Module._load = originalLoad; });

@@ -14,6 +14,14 @@
   "license": "MIT",
   "preferences": [
     {
+      "name": "randomFrdicPercentage",
+      "title": "Random Strategy — Frdic Percentage",
+      "type": "textfield",
+      "required": false,
+      "default": "50",
+      "description": "Chance of Frdic per pronunciation (0–100, default 50). ElevenLabs gets the remainder. Applies before cache lookup. Random mode does not fall back across providers."
+    },
+    {
       "name": "strictPrivacyChecks",
       "title": "Local Privacy Checks",
       "type": "checkbox",
@@ -149,7 +157,7 @@
     {
       "name": "cycle-speech-strategy",
       "title": "Cycle Speech Strategy",
-      "description": "Cycle frdic fallback, frdic only and ElevenLabs only; assign a global hotkey",
+      "description": "Cycle fallback, frdic only, ElevenLabs only and weighted random; assign a global hotkey",
       "mode": "no-view"
     },
     {

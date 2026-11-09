@@ -26,7 +26,7 @@ Alternatively use Raycast's Import Extension command and choose this directory. 
 | --- | --- |
 | French Pronounce (Selected Text) | Validate selection, strip boundary parenthetical annotations, retain six/seven-cell conjugation formatting, pronounce in French |
 | English Pronounce (Selected Text) | Validate selection and pronounce in English |
-| Cycle Speech Strategy | Persistently cycle Default → frdic only → ElevenLabs only → Default; HUD shows result; supports a global hotkey |
+| Cycle Speech Strategy | Persistently cycle Default → frdic only → ElevenLabs only → Random → Default; HUD shows result; supports a global hotkey |
 | Select Speech Strategy | View current strategy and select one directly |
 | Manage ElevenLabs Keys | Add/edit credentials and labels, enable/disable/delete, reactivate, view usage/cooldown |
 | Toggle Translation | Existing optional Chinese translation switch |
@@ -38,6 +38,8 @@ Only two **pronunciation/input** commands remain; the other commands manage sett
 * **Default:** fetch/play cached frdic audio first; if audio acquisition fails (HTTP, timeout, empty/non-MP3 response), try ElevenLabs.
 * **frdic only:** never use ElevenLabs, including its cache. No ElevenLabs key, voice or model configuration is needed. The default strategy likewise works without ElevenLabs when Frdic succeeds; if Frdic fails, its fallback cannot succeed without an active key.
 * **ElevenLabs only:** never use frdic, including its cache.
+* **Random: Frdic / ElevenLabs:** independently choose one provider for each pronunciation. Configure **Random Strategy — Frdic Percentage** in extension preferences: a number from 0 to 100 (decimals allowed), default 50. ElevenLabs receives the remainder; e.g. 70 means 70% Frdic / 30% ElevenLabs. Blank means 50; 0 and 100 select only ElevenLabs and Frdic respectively. Invalid values are reported without a TTS request and do not affect other strategies. Randomness gives a probability per attempt, not a guaranteed ratio over a small number of runs.
+* Random mode draws a provider **before cache lookup**, uses that provider's existing cache and keeps the other provider's cache intact. A cache hit does not make an API request or consume ElevenLabs credits. If the chosen provider fails or lacks credentials, random mode reports the error and **does not fall back to the other provider**. ElevenLabs Key rotation and cooldown still apply when ElevenLabs is chosen. The existing Default strategy retains Frdic → ElevenLabs fallback.
 * A local `afplay`/output-device failure does not trigger fallback or disable a key. The associated cache entry is removed so the next run can download again.
 * frdic requests time out after 12 seconds; each ElevenLabs attempt after 25 seconds. Requests never follow redirects.
 
@@ -103,7 +105,7 @@ The API endpoint and `xi-api-key` authentication remain unchanged. v4 uses only 
 
 ### Cache switching example
 
-Cache identity includes provider, text, actual chosen voice, model and effective settings. Pronounce the same text with **frdic only**, then **ElevenLabs only**: each provider downloads its own audio once. Switching back reuses the earlier entry. For multiple ElevenLabs voices, the extension randomly selects a voice before checking that voice's cache; if cached, it plays without a new API request, otherwise it downloads once. Random selection can pick the same voice twice and does not guarantee a new network request. Within a single pronunciation, Key retries use the same selected voice. Switching back to an earlier voice/model retains its cache. Changing a key alone does not invalidate audio. In Default mode, a successful frdic cache hit wins and does not invoke ElevenLabs.
+Cache identity includes provider, text, actual chosen voice, model and effective settings. Pronounce the same text with **frdic only**, then **ElevenLabs only**: each provider downloads its own audio once. Switching back reuses the earlier entry. For multiple ElevenLabs voices, the extension randomly selects a voice before checking that voice's cache; if cached, it plays without a new API request, otherwise it downloads once. Random selection can pick the same voice twice and does not guarantee a new network request. Within a single pronunciation, Key retries use the same selected voice. Switching back to an earlier voice/model retains its cache. Changing a key alone does not invalidate audio. In Default mode, a successful frdic cache hit wins and does not invoke ElevenLabs. In Random mode, the weighted choice happens first and the chosen provider's cache is checked, so the configured proportion is about choices, not necessarily API requests or successful playback.
 
 ## Development checks
 
