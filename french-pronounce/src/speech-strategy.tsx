@@ -10,7 +10,6 @@ export default function Command() {
   }
   return <List isLoading={!current}>
     {STRATEGIES.map((strategy) => <List.Item key={strategy} title={STRATEGY_LABELS[strategy]} icon={strategy === current ? Icon.Checkmark : Icon.Circle}
-      subtitle={strategy === "random" ? "Set Frdic percentage in extension preferences; no cross-provider fallback" : undefined}
       accessories={strategy === current ? [{ text: "Current" }] : []}
       actions={<ActionPanel><Action title="Use This Strategy" onAction={async () => {
         try { await setStrategy(strategy); setCurrent(strategy); } catch (error) { await report(error); }

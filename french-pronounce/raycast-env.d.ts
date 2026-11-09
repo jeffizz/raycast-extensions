@@ -8,8 +8,6 @@
 /* eslint-disable @typescript-eslint/ban-types */
 
 type ExtensionPreferences = {
-  /** Random Strategy — Frdic Percentage - Chance of Frdic per pronunciation (0–100, default 50). ElevenLabs gets the remainder. Applies before cache lookup. Random mode does not fall back across providers. */
-  "randomFrdicPercentage": string,
   /** Local Privacy Checks - Heuristically block emails, URLs, credentials, long digit strings and markup. Not a guarantee of privacy. The 175-character and control-character limits always apply. */
   "strictPrivacyChecks": boolean,
   /** ElevenLabs French Voice IDs - One or more Voice IDs separated by commas (or newlines if pasted). Randomly choose one per playback. Blank uses FvmvwvObRqIHojkEGh5N. Each voice must be available to the API key. */
@@ -31,7 +29,9 @@ type ExtensionPreferences = {
   /** DeepL API Key - Required only when Translation Engine is DeepL. Free keys usually end with :fx. */
   "deeplApiKey"?: string,
   /** Translation Toast Duration (Seconds) - Optional. Leave empty for Raycast default behavior. Valid values are integers from 3 to 30. */
-  "translationToastDurationSeconds"?: string
+  "translationToastDurationSeconds"?: string,
+  /** Random Strategy — Frdic Percentage - Chance of Frdic per pronunciation (0–100, default 50). ElevenLabs gets the remainder. Applies before cache lookup. Random mode does not fall back across providers. */
+  "randomFrdicPercentage": string
 }
 
 /** Preferences accessible in all the extension's commands */
