@@ -1,6 +1,8 @@
 import { showHUD } from "@raycast/api";
 import { playSpeech, type Language } from "./speech";
 import { showTranslationIfEnabled } from "./translate";
+import { validateText } from "./text-safety";
+import { getPreferences } from "./preferences";
 
 /**
  * Play pronunciation and, if a translation engine is configured, show the
@@ -12,10 +14,14 @@ export async function speakAndMaybeTranslate(
   translateText: string,
   language: Language,
 ): Promise<void> {
-  const translation = showTranslationIfEnabled(translateText, language);
+  // Validate both payloads before starting ANY third-party request.
+  const strict = getPreferences().strictPrivacyChecks !== false;
+  const safeSpeech = validateText(speechText, strict);
+  const safeTranslation = validateText(translateText, strict);
+  const translation = showTranslationIfEnabled(safeTranslation, language);
 
   try {
-    await playSpeech(speechText, language);
+    await playSpeech(safeSpeech, language);
   } catch (error) {
     await showHUD(`❌ Failed: ${(error as Error).message}`);
   }

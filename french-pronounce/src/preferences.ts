@@ -8,6 +8,13 @@ export interface Preferences {
   translationEngine: TranslationEngineId;
   deeplApiKey?: string;
   translationToastDurationSeconds?: string;
+  strictPrivacyChecks?: boolean;
+  elevenFrenchVoiceId?: string;
+  elevenEnglishVoiceId?: string;
+  elevenModel?: "eleven_v4" | "eleven_v3" | "eleven_flash_v2_5" | "eleven_turbo_v2_5" | "eleven_multilingual_v2";
+  elevenSpeed?: string;
+  elevenStability?: string;
+  elevenSimilarity?: string;
 }
 
 export function getPreferences(): Preferences {

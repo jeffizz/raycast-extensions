@@ -1,0 +1,199 @@
+{
+  "$schema": "https://raycast.github.io/templates/v1/package-schema.json",
+  "name": "french-pronounce",
+  "title": "French Pronounce",
+  "description": "Pronounce selected French and English text with frdic and ElevenLabs, local privacy checks, and managed API keys.",
+  "scripts": {
+    "dev": "ray develop",
+    "build": "ray build",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.cjs"
+  },
+  "icon": "command-icon.png",
+  "author": "you",
+  "license": "MIT",
+  "preferences": [
+    {
+      "name": "strictPrivacyChecks",
+      "title": "Local Privacy Checks",
+      "type": "checkbox",
+      "label": "Block possible private data before sending text",
+      "required": false,
+      "default": true,
+      "description": "Heuristically block emails, URLs, credentials, long digit strings and markup. Not a guarantee of privacy. The 175-character and control-character limits always apply."
+    },
+    {
+      "name": "elevenFrenchVoiceId",
+      "title": "ElevenLabs French Voice ID",
+      "type": "textfield",
+      "required": false,
+      "default": "FvmvwvObRqIHojkEGh5N",
+      "description": "Leave blank to use FvmvwvObRqIHojkEGh5N. Voice access/API use depends on the account and plan; a credit balance alone does not guarantee access."
+    },
+    {
+      "name": "elevenEnglishVoiceId",
+      "title": "ElevenLabs English Voice ID",
+      "type": "textfield",
+      "required": false,
+      "default": "bGnz83yTAb7caZSC7BBz",
+      "description": "Leave blank to use bGnz83yTAb7caZSC7BBz. Independent of frdic English Voice; requires account/plan access to the chosen voice."
+    },
+    {
+      "name": "elevenModel",
+      "title": "ElevenLabs Model",
+      "type": "dropdown",
+      "required": false,
+      "default": "eleven_v4",
+      "description": "Default Eleven v4. Existing selections are preserved; choose v4 explicitly to match the API playground. Flash/Turbo remain available legacy options. Multilingual v2 omits language_code.",
+      "data": [
+        { "title": "Eleven v4 — Current", "value": "eleven_v4" },
+        { "title": "Eleven v3 — Expressive", "value": "eleven_v3" },
+        {
+          "title": "Flash v2.5 — Legacy",
+          "value": "eleven_flash_v2_5"
+        },
+        {
+          "title": "Turbo v2.5 — Legacy",
+          "value": "eleven_turbo_v2_5"
+        },
+        {
+          "title": "Multilingual v2 — Alternative",
+          "value": "eleven_multilingual_v2"
+        }
+      ]
+    },
+    {
+      "name": "elevenSpeed",
+      "title": "ElevenLabs Speed",
+      "type": "textfield",
+      "required": false,
+      "default": "1.0",
+      "description": "Legacy Flash/Turbo/Multilingual only: 0.7–1.2, normal 1.0. Not sent for Eleven v4/v3; v4 does not support speed control."
+    },
+    {
+      "name": "elevenStability",
+      "title": "ElevenLabs Stability",
+      "type": "textfield",
+      "required": false,
+      "default": "0.65",
+      "description": "0–1; default 0.65. Eleven v3 maps to the nearest supported 0, 0.5 or 1. Other models use the value directly."
+    },
+    {
+      "name": "elevenSimilarity",
+      "title": "ElevenLabs Similarity",
+      "type": "textfield",
+      "required": false,
+      "default": "0.75",
+      "description": "0–1; default 0.75. Omitted for Eleven v3, which only accepts stability."
+    },
+    {
+      "name": "voicename",
+      "title": "frdic English Voice",
+      "description": "Only affects frdic English pronunciation. Does not change ElevenLabs voices; those use the separate ElevenLabs English Voice ID.",
+      "type": "dropdown",
+      "required": true,
+      "default": "en_uk_female",
+      "data": [
+        {
+          "title": "English UK — Male",
+          "value": "en_uk_male"
+        },
+        {
+          "title": "English UK — Female",
+          "value": "en_uk_female"
+        },
+        {
+          "title": "English US — Male",
+          "value": "en_us_male"
+        },
+        {
+          "title": "English US — Female",
+          "value": "en_us_female"
+        }
+      ]
+    },
+    {
+      "name": "translationEngine",
+      "title": "Translation Engine",
+      "description": "Optional translation shown as a toast. Choose None to skip translation.",
+      "type": "dropdown",
+      "required": false,
+      "default": "none",
+      "data": [
+        {
+          "title": "None",
+          "value": "none"
+        },
+        {
+          "title": "Google (free)",
+          "value": "google"
+        },
+        {
+          "title": "DeepL",
+          "value": "deepl"
+        }
+      ]
+    },
+    {
+      "name": "deeplApiKey",
+      "title": "DeepL API Key",
+      "description": "Required only when Translation Engine is DeepL. Free keys usually end with :fx.",
+      "type": "password",
+      "required": false
+    },
+    {
+      "name": "translationToastDurationSeconds",
+      "title": "Translation Toast Duration (Seconds)",
+      "description": "Optional. Leave empty for Raycast default behavior. Valid values are integers from 3 to 30.",
+      "type": "textfield",
+      "required": false
+    }
+  ],
+  "commands": [
+    {
+      "name": "pronounce",
+      "title": "French Pronounce (Selected Text)",
+      "description": "Play pronunciation of the selected text; never reads the clipboard",
+      "mode": "no-view"
+    },
+    {
+      "name": "pronounce-english",
+      "title": "English Pronounce (Selected Text)",
+      "description": "Play English pronunciation of the selected text",
+      "mode": "no-view"
+    },
+    {
+      "name": "cycle-speech-strategy",
+      "title": "Cycle Speech Strategy",
+      "description": "Cycle frdic fallback, frdic only and ElevenLabs only; assign a global hotkey",
+      "mode": "no-view"
+    },
+    {
+      "name": "speech-strategy",
+      "title": "Select Speech Strategy",
+      "description": "View and select the current speech provider strategy",
+      "mode": "view"
+    },
+    {
+      "name": "manage-elevenlabs-keys",
+      "title": "Manage ElevenLabs Keys",
+      "description": "Add, edit, disable, delete and reactivate API keys; view usage and 7-day cooldowns",
+      "mode": "view"
+    },
+    {
+      "name": "toggle-translation",
+      "title": "Toggle Translation",
+      "description": "Toggle translation toast on or off at runtime",
+      "mode": "no-view"
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.55.0",
+    "run-script-os": "^1.1.6"
+  },
+  "devDependencies": {
+    "@types/node": "^18.8.0",
+    "@types/react": "^19.3.0",
+    "typescript": "^5.0.0"
+  }
+}
