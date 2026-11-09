@@ -6,7 +6,23 @@ import { characterCount } from "./text-safety";
 import { describeElevenError } from "./elevenlabs-errors";
 
 export const DEFAULT_VOICES = { fr: "FvmvwvObRqIHojkEGh5N", en: "bGnz83yTAb7caZSC7BBz" } as const;
-export const ELEVEN_MODELS = ["eleven_v4", "eleven_v3", "eleven_multilingual_v2", "eleven_flash_v2_5", "eleven_turbo_v2_5"] as const;
+const LEGACY_MODELS = ["eleven_multilingual_v2", "eleven_flash_v2_5", "eleven_turbo_v2_5"] as const;
+const V4_MODELS = ["eleven_v4", "eleven_v4_turbo"] as const;
+
+/** Commas or newlines separate IDs. Empty entries are ignored and duplicates removed. */
+export function parseVoiceIds(raw: string | undefined, language: Language): string[] {
+  const trimmed = raw?.trim() ?? "";
+  if (!trimmed) return [DEFAULT_VOICES[language]];
+  const ids = [...new Set(trimmed.split(/[,，\r\n]+/).map((item) => item.trim()).filter(Boolean))];
+  if (ids.length === 0 || ids.some((id) => !/^[a-zA-Z0-9_-]{1,100}$/.test(id))) {
+    throw new Error(`Invalid ElevenLabs ${language === "fr" ? "French" : "English"} Voice ID list; separate IDs with commas or newlines`);
+  }
+  return ids;
+}
+
+export function chooseVoiceId(ids: string[]): string {
+  return ids.length === 1 ? ids[0] : ids[Math.floor(Math.random() * ids.length)];
+}
 
 export interface ElevenConfig {
   voiceId: string;
@@ -26,14 +42,14 @@ function numeric(value: string | undefined, fallback: number, min: number, max: 
 
 export function getElevenConfig(language: Language): ElevenConfig {
   const prefs = getPreferences();
-  const voiceId = (language === "fr" ? prefs.elevenFrenchVoiceId : prefs.elevenEnglishVoiceId)?.trim() || DEFAULT_VOICES[language];
-  if (!voiceId || !/^[a-zA-Z0-9_-]{1,100}$/.test(voiceId)) {
-    throw new Error(`Set a valid ElevenLabs ${language === "fr" ? "French" : "English"} Voice ID in extension preferences`);
+  const voiceId = chooseVoiceId(parseVoiceIds(language === "fr" ? prefs.elevenFrenchVoiceId : prefs.elevenEnglishVoiceId, language));
+  const model = prefs.elevenModel?.trim() || "eleven_v4";
+  // Validate syntax, not a fixed allowlist: future model IDs remain usable.
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(model)) {
+    throw new Error("Invalid ElevenLabs model ID. Enter a model ID such as eleven_v4 (letters, digits, underscores, dots or hyphens)");
   }
-  const model = prefs.elevenModel ?? "eleven_v4";
-  if (!(ELEVEN_MODELS as readonly string[]).includes(model)) {
-    throw new Error("Select a supported ElevenLabs model in preferences");
-  }
+  const isV4 = (V4_MODELS as readonly string[]).includes(model);
+  const isLegacy = (LEGACY_MODELS as readonly string[]).includes(model);
   return {
     voiceId,
     language,
@@ -42,20 +58,26 @@ export function getElevenConfig(language: Language): ElevenConfig {
       // v3 only accepts discrete stability values. Map legacy/custom values to the nearest supported mode.
       stability: model === "eleven_v3"
         ? Math.round(numeric(prefs.elevenStability, 0.5, 0, 1, "Stability") * 2) / 2
-        : numeric(prefs.elevenStability, 0.65, 0, 1, "Stability"),
-      similarity_boost: model === "eleven_v3" ? 0.75 : numeric(prefs.elevenSimilarity, 0.75, 0, 1, "Similarity"),
+        : isV4 || isLegacy ? numeric(prefs.elevenStability, 0.65, 0, 1, "Stability") : 0.65,
+      similarity_boost: isV4 || isLegacy ? numeric(prefs.elevenSimilarity, 0.75, 0, 1, "Similarity") : 0.75,
       style: 0,
-      speed: model === "eleven_v4" || model === "eleven_v3" ? 1 : numeric(prefs.elevenSpeed, 1, 0.7, 1.2, "Speed"),
+      speed: isLegacy ? numeric(prefs.elevenSpeed, 1, 0.7, 1.2, "Speed") : 1,
     },
   };
 }
 
 export function elevenRequestBody(text: string, config: ElevenConfig) {
+  const v4 = (V4_MODELS as readonly string[]).includes(config.model);
+  const legacy = (LEGACY_MODELS as readonly string[]).includes(config.model);
+  const known = v4 || legacy || config.model === "eleven_v3";
+  // Unknown future models receive only the required fields: optional settings and
+  // language compatibility cannot be assumed. ElevenLabs validates the model ID.
+  if (!known) return { text, model_id: config.model };
   return {
     text,
     model_id: config.model,
     ...(config.model === "eleven_multilingual_v2" ? {} : { language_code: config.language }),
-    voice_settings: config.model === "eleven_v4"
+    voice_settings: v4
       ? { stability: config.settings.stability, similarity_boost: config.settings.similarity_boost }
       : config.model === "eleven_v3"
         ? { stability: config.settings.stability }

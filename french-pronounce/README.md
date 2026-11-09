@@ -16,7 +16,7 @@ npm run dev
 Alternatively use Raycast's Import Extension command and choose this directory. The legacy shell script is retired and cannot issue requests.
 
 1. Open **Manage ElevenLabs Keys**, press `⌘N`, and add a label and API key. Saving never calls ElevenLabs.
-2. Voice IDs are optional: blank/missing French uses `FvmvwvObRqIHojkEGh5N`; English uses `bGnz83yTAb7caZSC7BBz`. These are extension defaults requested by the user, not guaranteed universally accessible/free ElevenLabs voices. Explicit IDs override them. Use voices available to every account/key being rotated. **frdic English Voice** only affects frdic, never ElevenLabs.
+2. Voice IDs are optional: blank/missing French uses `FvmvwvObRqIHojkEGh5N`; English uses `bGnz83yTAb7caZSC7BBz`. These are extension defaults, not guaranteed universally accessible/free voices. Configure one or multiple IDs separately for French and English, separated by commas or pasted line breaks, for example `voiceID1, voiceID2`. One ID is used as-is; for multiple unique IDs, one is randomly chosen each time ElevenLabs pronunciation is invoked. Empty entries are ignored and duplicates removed. Use voices available to every account/key being rotated. **Frdic English Voice** only affects Frdic, never ElevenLabs.
 3. Assign hotkeys to the two Selected Text commands and **Cycle Speech Strategy**. In Raycast select the command, open **Configure Command → Set Hotkey**, or use **Settings → Shortcuts**.
 4. Accessibility access may be needed for selected text. No clipboard fallback is used when selection is unavailable.
 
@@ -36,7 +36,7 @@ Only two **pronunciation/input** commands remain; the other commands manage sett
 ## Provider strategies
 
 * **Default:** fetch/play cached frdic audio first; if audio acquisition fails (HTTP, timeout, empty/non-MP3 response), try ElevenLabs.
-* **frdic only:** never use ElevenLabs, including its cache.
+* **frdic only:** never use ElevenLabs, including its cache. No ElevenLabs key, voice or model configuration is needed. The default strategy likewise works without ElevenLabs when Frdic succeeds; if Frdic fails, its fallback cannot succeed without an active key.
 * **ElevenLabs only:** never use frdic, including its cache.
 * A local `afplay`/output-device failure does not trigger fallback or disable a key. The associated cache entry is removed so the next run can download again.
 * frdic requests time out after 12 seconds; each ElevenLabs attempt after 25 seconds. Requests never follow redirects.
@@ -75,9 +75,9 @@ This extension uses `POST /v1/text-to-speech/{voice_id}`. It deliberately expose
 | Parameter | Extension behaviour |
 | --- | --- |
 | `text` | Validated selected/formatted text, at most 175 characters |
-| `voice_id` | Optional overrides; French default `FvmvwvObRqIHojkEGh5N`, English default `bGnz83yTAb7caZSC7BBz` |
-| `model_id` | New default `eleven_v4`; also v3, Multilingual v2, legacy Flash/Turbo v2.5. Existing saved model selections remain unchanged until explicitly changed |
-| `language_code` | Explicit `fr` / `en`; omitted for Multilingual v2 because it is unsupported |
+| `voice_id` | Optional comma/newline-separated lists. Pick one ID uniformly at random per playback; empty list uses French `FvmvwvObRqIHojkEGh5N` or English `bGnz83yTAb7caZSC7BBz`. Selected voice stays fixed when retrying keys and has its own cache |
+| `model_id` | Free text, default `eleven_v4`. Examples: `eleven_v4_turbo`, `eleven_v3`, `eleven_multilingual_v2`, `eleven_flash_v2_5`, `eleven_turbo_v2_5`. Letters, digits, underscore, hyphen and dot accepted; starts with a letter/digit, max 128 characters. Availability is checked by ElevenLabs, not the extension |
+| `language_code` | Explicit `fr` / `en` for known models; omitted for Multilingual v2 and unknown models |
 | `output_format` | Fixed `mp3_44100_128`, compatible with local `afplay` |
 | `voice_settings.speed` | Legacy models only: default 1.0, restricted to 0.7–1.2. Not sent for v4/v3 |
 | `voice_settings.stability` | Default 0.65, configurable 0–1; v3 maps to nearest 0 / 0.5 / 1 |
@@ -87,13 +87,13 @@ This extension uses `POST /v1/text-to-speech/{voice_id}`. It deliberately expose
 
 Single words are supported, but generated TTS is not a dictionary recording or a guarantee of the intended homograph pronunciation. Explicit language and a native-language voice help short/ambiguous text. Sentence context can resolve ambiguities. No artificial sentence or instruction is prepended to the selection. French frdic conjugation punctuation is retained for compatibility; ElevenLabs may interpret its question marks differently, so audition before using it as a learning reference.
 
-Other API facilities include speaker boost, seed (best-effort reproducibility), pronunciation dictionaries, previous/next text or request context, streaming/timestamps, output formats, and eligible-enterprise zero retention. They are not necessary for this first short-text workflow and are not exposed. Model-specific support differs; no assumption is made that newer expressive models are better for isolated vocabulary.
+Known models use their model-specific settings. For a manually entered **unknown model**, only `text` and `model_id` are sent in the request body: language, voice settings and normalization are omitted because their compatibility cannot be predicted. Consequently the Speed/Stability/Similarity preferences do not affect unknown models. ElevenLabs may reject an ID, require additional parameters, or return an error; under the existing policy, API errors place the Key in cooldown. Check the model documentation and access before using it. Other API facilities include speaker boost, seed, pronunciation dictionaries, context, streaming/timestamps and eligible-enterprise zero retention; they are not exposed.
 
 ## Troubleshooting HTTP 402
 
 HTTP 402 alone does not identify the root cause. Credits, voice/API access, billing and plan restrictions can differ; a successful playground request must be compared using the same account/key, voice, model and endpoint. Never infer that every 402 means exhausted credits or that selecting v4 automatically fixes billing.
 
-1. Reload/rebuild the extension and explicitly select **Eleven v4** to match the successful request shown in the screenshot; existing saved Flash choices are preserved.
+1. Reload/rebuild the extension and enter `eleven_v4` in **ElevenLabs Model** to match the successful request shown in the screenshot. The preference has changed from a dropdown to a text field; check its value after updating, because migration of a previously saved dropdown value is controlled by Raycast.
 2. Match the successful request's Voice ID. The extension defaults do not bypass access restrictions.
 3. Open **Manage ElevenLabs Keys → Reactivate Now (⌘R)** to clear the previous 7-day cooldown. This is deliberate/manual: upgrading does not silently reactivate blocked keys or make billable requests.
 4. Retry once. If it still fails, inspect **Last API error** in the details body. It now includes a bounded/redacted provider code and message (when returned as JSON), not just HTTP 402. A generic old `HTTP 402` cannot be retroactively expanded.
@@ -103,7 +103,7 @@ The API endpoint and `xi-api-key` authentication remain unchanged. v4 uses only 
 
 ### Cache switching example
 
-Cache identity already includes the provider, not just text. Pronounce the same text with **frdic only**, then **ElevenLabs only**: each provider downloads its own audio once. Switch back to either: its previous cached file is reused. Voice/model/parameter changes have separate cache entries; switching back retains earlier entries. Changing a key alone does not invalidate audio. In Default mode, a successful frdic cache hit wins and does not invoke ElevenLabs. A regression test verifies successful caches for both providers and switching voices/models back and forth.
+Cache identity includes provider, text, actual chosen voice, model and effective settings. Pronounce the same text with **frdic only**, then **ElevenLabs only**: each provider downloads its own audio once. Switching back reuses the earlier entry. For multiple ElevenLabs voices, the extension randomly selects a voice before checking that voice's cache; if cached, it plays without a new API request, otherwise it downloads once. Random selection can pick the same voice twice and does not guarantee a new network request. Within a single pronunciation, Key retries use the same selected voice. Switching back to an earlier voice/model retains its cache. Changing a key alone does not invalidate audio. In Default mode, a successful frdic cache hit wins and does not invoke ElevenLabs.
 
 ## Development checks
 

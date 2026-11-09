@@ -32,7 +32,7 @@ const { validateText, characterCount } = require('../src/text-safety.ts');
 const { reserveKey, failKey, reactivateKey, refreshExpiredKeys, COOLDOWN_MS } = require('../src/key-state.ts');
 const { updateKeys } = require('../src/state.ts');
 const { getStrategy, setStrategy, cycleStrategy } = require('../src/strategy.ts');
-const { requestElevenAudio, getElevenConfig, elevenRequestBody, DEFAULT_VOICES } = require('../src/elevenlabs.ts');
+const { requestElevenAudio, getElevenConfig, elevenRequestBody, parseVoiceIds, DEFAULT_VOICES } = require('../src/elevenlabs.ts');
 const { describeElevenError } = require('../src/elevenlabs-errors.ts');
 const { playSpeech } = require('../src/speech.ts');
 const { speakAndMaybeTranslate } = require('../src/workflow.ts');
@@ -204,5 +204,72 @@ test('successful frdic and ElevenLabs caches stay separate and survive switching
   preferences.elevenFrenchVoiceId = 'FrenchVoice'; await playSpeech(text, 'fr'); assert.equal(calls.length, 3);
   preferences.elevenModel = 'eleven_multilingual_v2'; await playSpeech(text, 'fr'); assert.equal(calls.length, 4);
   delete preferences.elevenModel; await playSpeech(text, 'fr'); assert.equal(calls.length, 4);
+});
+test('frdic works without ElevenLabs settings or keys in frdic-only and default modes', async () => {
+  reset(); preferences = { translationEngine: 'none', strictPrivacyChecks: true, elevenFrenchVoiceId: 'bad value', elevenModel: 'invalid model' };
+  const calls = []; global.fetch = async (url) => { calls.push(url); return response(); };
+  await setStrategy('frdic'); await playSpeech('independent-frdic-only', 'fr');
+  await setStrategy('fallback'); await playSpeech('independent-fallback', 'fr');
+  assert.equal(calls.length, 2); assert.ok(calls.every((url) => url.includes('frdic')));
+  assert.equal(storage.has('elevenlabs-keys-v1'), false);
+});
+test('default fallback reports missing ElevenLabs key only after frdic fails', async () => {
+  reset(); delete preferences.elevenFrenchVoiceId; delete preferences.elevenEnglishVoiceId;
+  let calls = 0; global.fetch = async () => { calls++; return new Response('{}', { status: 503 }); };
+  await assert.rejects(playSpeech('fallback-without-keys', 'fr'), /No active ElevenLabs keys/);
+  assert.equal(calls, 1);
+});
+test('voice lists parse comma/newline, deduplicate, validate and select expected entries', () => {
+  reset();
+  assert.deepEqual(parseVoiceIds(undefined, 'fr'), [DEFAULT_VOICES.fr]);
+  assert.deepEqual(parseVoiceIds('  \n', 'en'), [DEFAULT_VOICES.en]);
+  assert.deepEqual(parseVoiceIds('VoiceA, VoiceB\r\nVoiceC， VoiceA,,', 'fr'), ['VoiceA', 'VoiceB', 'VoiceC']);
+  assert.throws(() => parseVoiceIds('VoiceA, bad id', 'fr'), /Invalid/);
+  assert.throws(() => parseVoiceIds(',,', 'fr'), /Invalid/);
+  preferences.elevenFrenchVoiceId = 'VoiceA, VoiceB\nVoiceC';
+  const originalRandom = Math.random;
+  try {
+    Math.random = () => 0; assert.equal(getElevenConfig('fr').voiceId, 'VoiceA');
+    Math.random = () => 0.4; assert.equal(getElevenConfig('fr').voiceId, 'VoiceB');
+    Math.random = () => 0.99; assert.equal(getElevenConfig('fr').voiceId, 'VoiceC');
+    preferences.elevenFrenchVoiceId = 'VoiceA';
+    assert.equal(getElevenConfig('fr').voiceId, 'VoiceA');
+  } finally { Math.random = originalRandom; }
+});
+test('randomly selected voice is fixed during retries and cache is separate per voice', async () => {
+  reset(); await updateKeys((state) => { state.keys = [key('a'), key('b')]; });
+  await setStrategy('elevenlabs'); preferences.elevenFrenchVoiceId = 'VoiceA, VoiceB';
+  const originalRandom = Math.random; let choice = 0; Math.random = () => choice;
+  const calls = [];
+  global.fetch = async (url) => { calls.push(url); return calls.length === 1 ? new Response('error', { status: 500 }) : response(); };
+  try {
+    await playSpeech('random-voice-cache', 'fr');
+    assert.equal(calls.length, 2); assert.ok(calls.every((url) => url.includes('/VoiceA?')));
+    choice = 0.99; await playSpeech('random-voice-cache', 'fr');
+    assert.equal(calls.length, 3); assert.ok(calls[2].includes('/VoiceB?'));
+    choice = 0; await playSpeech('random-voice-cache', 'fr'); assert.equal(calls.length, 3);
+    choice = 0.99; await playSpeech('random-voice-cache', 'fr'); assert.equal(calls.length, 3);
+  } finally { Math.random = originalRandom; }
+});
+test('freeform model handles whitespace, future IDs, v4 turbo, and invalid values safely', () => {
+  reset(); preferences.elevenModel = '  '; assert.equal(getElevenConfig('fr').model, 'eleven_v4');
+  preferences.elevenModel = '  eleven_v4_turbo  ';
+  let body = elevenRequestBody('bonjour', getElevenConfig('fr'));
+  assert.equal(body.model_id, 'eleven_v4_turbo');
+  assert.deepEqual(body.voice_settings, { stability: 0.65, similarity_boost: 0.75 });
+  preferences.elevenModel = 'eleven_future_v9'; preferences.elevenSpeed = 'bad'; preferences.elevenStability = 'bad';
+  body = elevenRequestBody('bonjour', getElevenConfig('fr'));
+  assert.deepEqual(body, { text: 'bonjour', model_id: 'eleven_future_v9' });
+  preferences.elevenModel = 'invalid model'; assert.throws(() => getElevenConfig('fr'), /Invalid ElevenLabs model/);
+  preferences.elevenModel = '../bad'; assert.throws(() => getElevenConfig('fr'), /Invalid ElevenLabs model/);
+});
+test('unknown model ID is sent to API and API rejection follows normal cooldown', async () => {
+  reset(); await updateKeys((state) => { state.keys = [key('a')]; }); preferences.elevenModel = 'future_model_v1';
+  global.fetch = async (_url, options) => {
+    assert.deepEqual(JSON.parse(options.body), { text: 'hello', model_id: 'future_model_v1' });
+    return new Response(JSON.stringify({ detail: { status: 'model_not_found', message: 'Unknown model' } }), { status: 400 });
+  };
+  await assert.rejects(requestElevenAudio('hello', getElevenConfig('en')), /model_not_found/);
+  assert.ok((await updateKeys((state) => state.keys))[0].blockedUntil > Date.now());
 });
 test.after(() => { fs.rmSync(supportPath, { recursive: true, force: true }); Module._load = originalLoad; });

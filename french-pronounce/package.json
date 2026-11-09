@@ -24,43 +24,27 @@
     },
     {
       "name": "elevenFrenchVoiceId",
-      "title": "ElevenLabs French Voice ID",
+      "title": "ElevenLabs French Voice IDs",
       "type": "textfield",
       "required": false,
       "default": "FvmvwvObRqIHojkEGh5N",
-      "description": "Leave blank to use FvmvwvObRqIHojkEGh5N. Voice access/API use depends on the account and plan; a credit balance alone does not guarantee access."
+      "description": "One or more Voice IDs separated by commas (or newlines if pasted). Randomly choose one per playback. Blank uses FvmvwvObRqIHojkEGh5N. Each voice must be available to the API key."
     },
     {
       "name": "elevenEnglishVoiceId",
-      "title": "ElevenLabs English Voice ID",
+      "title": "ElevenLabs English Voice IDs",
       "type": "textfield",
       "required": false,
       "default": "bGnz83yTAb7caZSC7BBz",
-      "description": "Leave blank to use bGnz83yTAb7caZSC7BBz. Independent of frdic English Voice; requires account/plan access to the chosen voice."
+      "description": "One or more Voice IDs separated by commas (or newlines if pasted). Randomly choose one per playback. Blank uses bGnz83yTAb7caZSC7BBz. Each voice must be available to the API key."
     },
     {
       "name": "elevenModel",
       "title": "ElevenLabs Model",
-      "type": "dropdown",
+      "type": "textfield",
       "required": false,
       "default": "eleven_v4",
-      "description": "Default Eleven v4. Existing selections are preserved; choose v4 explicitly to match the API playground. Flash/Turbo remain available legacy options. Multilingual v2 omits language_code.",
-      "data": [
-        { "title": "Eleven v4 — Current", "value": "eleven_v4" },
-        { "title": "Eleven v3 — Expressive", "value": "eleven_v3" },
-        {
-          "title": "Flash v2.5 — Legacy",
-          "value": "eleven_flash_v2_5"
-        },
-        {
-          "title": "Turbo v2.5 — Legacy",
-          "value": "eleven_turbo_v2_5"
-        },
-        {
-          "title": "Multilingual v2 — Alternative",
-          "value": "eleven_multilingual_v2"
-        }
-      ]
+      "description": "Enter a model ID (letters, numbers, _, - or .). Examples: eleven_v4, eleven_v4_turbo, eleven_v3, eleven_multilingual_v2, eleven_flash_v2_5, eleven_turbo_v2_5. Blank uses eleven_v4. New IDs are sent without optional settings; check model access and documentation."
     },
     {
       "name": "elevenSpeed",
@@ -88,7 +72,7 @@
     },
     {
       "name": "voicename",
-      "title": "frdic English Voice",
+      "title": "Frdic English Voice",
       "description": "Only affects frdic English pronunciation. Does not change ElevenLabs voices; those use the separate ElevenLabs English Voice ID.",
       "type": "dropdown",
       "required": true,
