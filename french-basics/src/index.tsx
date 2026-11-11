@@ -3,12 +3,15 @@ import { Grid, ActionPanel, Action, showToast, Toast, Icon, environment } from "
 import { playFrenchSpeech, playLocalAudio } from "./tts";
 import { VOCAB_DATA, VocabItem } from "./data/vocabulary";
 import { toFrenchCardinal, toFrenchOrdinal, getFrenchApproximate } from "./utils/numberToFrench";
+import { getDateTimeItems } from "./utils/dateTime";
 import path from "path";
 
 const CATEGORY_NAMES: Record<string, string> = {
   cardinal: "🔢 基数词",
   ordinal: "🥇 序数词",
   approx: "📦 概数名词",
+  time: "🕒 时间表达",
+  date: "📆 日期表达",
   week: "📅 星期",
   month: "🗓️ 月份",
   color: "🎨 颜色",
@@ -47,31 +50,28 @@ function cardToSvgDataUrl(french: string, phonetic?: string, chinese?: string): 
   const chineseLines = chinese ? wrapText(chinese, 12) : [];
   const safePhonetic = phonetic ? escapeXml(phonetic) : "";
 
+  // Long dates need tighter line spacing and smaller text to fit in a grid card.
   const totalElements = frenchLines.length + (phonetic ? 1 : 0) + chineseLines.length;
-  let startY = 28;
-  if (totalElements === 2) startY = 38;
-  if (totalElements >= 4) startY = 20;
-
+  const lineHeight = Math.min(46, 216 / Math.max(totalElements, 1));
+  const longestFrench = Math.max(...frenchLines.map((line) => line.length), 1);
+  const frenchFontSize = Math.min(34, lineHeight * 0.8, 280 / (longestFrench * 0.7));
+  const secondaryFontSize = Math.min(22, lineHeight * 0.7);
   let contentSvg = "";
-  let currentY = startY;
+  let currentY = (240 - lineHeight * (totalElements - 1)) / 2;
 
   for (const line of frenchLines) {
-    contentSvg += `<text x="50%" y="${currentY}%" dominant-baseline="middle" text-anchor="middle" font-size="34" font-weight="900" fill="#0F172A" font-family="system-ui, -apple-system, sans-serif">${escapeXml(line)}</text>`;
-    currentY += 19;
+    contentSvg += `<text x="50%" y="${currentY}" dominant-baseline="middle" text-anchor="middle" font-size="${frenchFontSize}" font-weight="900" fill="#0F172A" font-family="system-ui, -apple-system, sans-serif">${escapeXml(line)}</text>`;
+    currentY += lineHeight;
   }
 
   if (safePhonetic) {
-    currentY += 2;
-    contentSvg += `<text x="50%" y="${currentY}%" dominant-baseline="middle" text-anchor="middle" font-size="20" font-weight="600" fill="#475569" font-family="system-ui, -apple-system, sans-serif">${safePhonetic}</text>`;
-    currentY += 19;
+    contentSvg += `<text x="50%" y="${currentY}" dominant-baseline="middle" text-anchor="middle" font-size="${secondaryFontSize}" font-weight="600" fill="#475569" font-family="system-ui, -apple-system, sans-serif">${safePhonetic}</text>`;
+    currentY += lineHeight;
   }
 
-  if (chineseLines.length > 0) {
-    currentY += 2;
-    for (const line of chineseLines) {
-      contentSvg += `<text x="50%" y="${currentY}%" dominant-baseline="middle" text-anchor="middle" font-size="22" font-weight="800" fill="#D97706" font-family="system-ui, -apple-system, sans-serif">${escapeXml(line)}</text>`;
-      currentY += 19;
-    }
+  for (const line of chineseLines) {
+    contentSvg += `<text x="50%" y="${currentY}" dominant-baseline="middle" text-anchor="middle" font-size="${secondaryFontSize}" font-weight="800" fill="#D97706" font-family="system-ui, -apple-system, sans-serif">${escapeXml(line)}</text>`;
+    currentY += lineHeight;
   }
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="240" viewBox="0 0 300 240">
@@ -130,8 +130,9 @@ export default function Command() {
     }
   }
 
+  const dateTimeResult = getDateTimeItems(searchText);
   const parsedNumber = parseInt(searchText.trim(), 10);
-  const isInputNumber = !isNaN(parsedNumber) && parsedNumber >= 0;
+  const isInputNumber = !dateTimeResult && !isNaN(parsedNumber) && parsedNumber >= 0;
 
   const dynamicItems: VocabItem[] = [];
   if (isInputNumber) {
@@ -158,9 +159,15 @@ export default function Command() {
     }
   }
 
-  const displayItems = isInputNumber
-    ? dynamicItems
-    : VOCAB_DATA.filter((item) => categoryFilter === "all" || item.category === categoryFilter);
+  const query = searchText.trim().toLocaleLowerCase();
+  const displayItems = dateTimeResult
+    ? dateTimeResult.items
+    : isInputNumber
+      ? dynamicItems
+      : VOCAB_DATA.filter((item) =>
+          (categoryFilter === "all" || item.category === categoryFilter) &&
+          (!query || [item.french, item.chinese, item.phonetic ?? ""].some((value) => value.toLocaleLowerCase().includes(query)))
+        );
 
   const categoriesPresent = Array.from(new Set(displayItems.map((item) => item.category)));
 
@@ -170,13 +177,16 @@ export default function Command() {
       inset={Grid.Inset.Zero}
       searchText={searchText}
       onSearchTextChange={setSearchText}
-      searchBarPlaceholder="搜索词汇或直接输入数字 (如: 71)..."
+      filtering={false}
+      searchBarPlaceholder="搜索词汇，或输入数字、14:30、2024-02-29"
       searchBarAccessory={
         <Grid.Dropdown tooltip="筛选词汇分类" onChange={setCategoryFilter}>
           <Grid.Dropdown.Item title="全部分类" value="all" />
           <Grid.Dropdown.Item title="🔢 基数词" value="cardinal" />
           <Grid.Dropdown.Item title="🥇 序数词" value="ordinal" />
           <Grid.Dropdown.Item title="📦 概数名词" value="approx" />
+          <Grid.Dropdown.Item title="🕒 时间表达" value="time" />
+          <Grid.Dropdown.Item title="📆 日期表达" value="date" />
           <Grid.Dropdown.Item title="📅 星期" value="week" />
           <Grid.Dropdown.Item title="🗓️ 月份" value="month" />
           <Grid.Dropdown.Item title="🎨 颜色" value="color" />
@@ -184,6 +194,7 @@ export default function Command() {
         </Grid.Dropdown>
       }
     >
+      {dateTimeResult?.error && <Grid.EmptyView title="无法识别时间或日期" description={dateTimeResult.error} />}
       {categoriesPresent.map((catKey) => {
         const catItems = displayItems.filter((item) => item.category === catKey);
         const sectionTitle = CATEGORY_NAMES[catKey] || catKey;

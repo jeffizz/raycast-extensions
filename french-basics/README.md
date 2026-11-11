@@ -4,9 +4,16 @@
 
 ## 命令
 
-* **French Basics**：字母、数字等基础词汇。26 个字母使用内置离线音频。
+* **French Basics**：字母、数字、时间、日期等基础词汇。26 个字母使用内置离线音频。
 * **French Noun Lookup**：优先读取选区，再回退剪贴板；也可手动输入。使用本地 SQLite 按需查询词形、阴阳性及冠词搭配，可选 DeepL 中文翻译。
 * **Speak Selected French Noun**：只读取选区，不回退剪贴板。按输入数量朗读：确定复数的裸词用 `des`，显式 `les/des` 保留；单数或数量不明时默认用单数不定冠词。相关阴阳形式使用 `?` + Tab 合为一个发音请求。同形异词优先选原形一致的候选，再按词频选择，HUD 简短提示“有歧义”。不调用翻译 API。
+
+## French Basics 时间与日期
+
+* 在搜索框输入 24 小时制 `14:30`、`9:05` 等，显示法语时间；`00:00` 和 `12:00` 还提供 `minuit` 和 `midi`。输入 `1:05` 时分钟不会读出前导零。
+* 输入 `YYYY-MM-DD` 或 `YYYY/MM/DD`，例如 `2024-02-29`，显示包含星期、日期和年份的法语表达。支持 0001–9999 年；闰年和无效日期会校验。每月 1 日使用 `premier`。
+* 选择卡片后按回车朗读，或使用 `⌘C` 复制表达。时间和日期结果不受分类筛选影响；不输入内容时也可以通过分类浏览示例。
+* 数字输入本身仍沿用原有解析和范围行为；时间、日期使用独立的格式校验。
 
 ## 离线词库与统计
 
@@ -35,6 +42,9 @@
 npm run dev
 npm run build
 ./node_modules/.bin/ray validate
+node scripts/test-numbers.cjs
+node scripts/test-date-time.cjs
+node scripts/test-basics-ui.cjs
 node --max-old-space-size=100 scripts/test-nouns.cjs
 ```
 

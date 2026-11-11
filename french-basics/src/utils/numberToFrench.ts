@@ -11,7 +11,7 @@ export function toFrenchCardinal(n: number): string {
     const unit = n % 10;
     if (unit === 0) return TENS[ten] + (ten === 5 ? "e" : "");
     if (unit === 1) return `${TENS[ten]}${ten === 5 ? "e" : ""} et un`;
-    return `${TENS[ten]}${ten === 5 ? "e" : " "}-${ONES[unit]}`;
+    return `${TENS[ten]}${ten === 5 ? "e" : ""}-${ONES[unit]}`;
   }
   if (n < 80) {
     const unit = n - 60;
@@ -47,11 +47,14 @@ export function toFrenchCardinal(n: number): string {
 
 export function toFrenchOrdinal(n: number): string {
   if (n === 1) return "premier / première";
-  const cardinal = toFrenchCardinal(n);
+  // A multiplier of mille never takes the plural s, even when it ends in cent or vingt.
+  let cardinal = toFrenchCardinal(n).replace(/\b(cent|vingt)s(?= mille\b)/g, "$1");
+  // Only the plural endings of cents and quatre-vingts are dropped; trois, six,
+  // dix and deux keep their final s/x before the ordinal suffix.
+  cardinal = cardinal.replace(/\b(cent|vingt)s$/, "$1");
   if (cardinal.endsWith("e")) return cardinal.slice(0, -1) + "ième";
   if (cardinal.endsWith("q")) return cardinal + "uième";
   if (cardinal.endsWith("f")) return cardinal.slice(0, -1) + "vième";
-  if (cardinal.endsWith("s")) return cardinal.slice(0, -1) + "ième";
   return cardinal + "ième";
 }
 
@@ -66,7 +69,7 @@ export function getFrenchApproximate(n: number): string | null {
     50: "une cinquantaine (50个左右)",
     60: "une soixantaine (60个左右)",
     100: "une centaine (100个左右 / 上百)",
-    1000: "un meillier (1000左右 / 成千上万)",
+    1000: "un millier (1000左右 / 成千上万)",
   };
   return approxMap[n] || null;
 }

@@ -1,6 +1,6 @@
 export interface VocabItem {
   id: string;
-  category: "cardinal" | "ordinal" | "approx" | "month" | "week" | "color" | "alphabet";
+  category: "cardinal" | "ordinal" | "approx" | "month" | "week" | "color" | "alphabet" | "time" | "date";
   french: string;
   phonetic?: string;
   chinese: string;
@@ -70,7 +70,13 @@ export const VOCAB_DATA: VocabItem[] = [
   { id: "a50", category: "approx", french: "une cinquantaine", chinese: "50个左右" },
   { id: "a60", category: "approx", french: "une soixantaine", chinese: "60个左右" },
   { id: "a100", category: "approx", french: "une centaine", chinese: "100个左右 / 上百" },
-  { id: "a1000", category: "approx", french: "un meillier", chinese: "1000左右 / 成千上万" },
+  { id: "a1000", category: "approx", french: "un millier", chinese: "1000左右 / 成千上万" },
+
+  // --- 时间和日期示例（可在搜索框输入具体时间或日期）---
+  { id: "time-example-1", category: "time", french: "quatorze heures trente", chinese: "14:30" },
+  { id: "time-example-2", category: "time", french: "midi", chinese: "12:00" },
+  { id: "time-example-3", category: "time", french: "minuit", chinese: "00:00" },
+  { id: "date-example-1", category: "date", french: "le premier janvier deux mille vingt-quatre", chinese: "2024-01-01 星期一" },
 
   // --- 星期 ---
   { id: "w1", category: "week", french: "lundi", phonetic: "[lœ̃.di]", chinese: "星期一" },
