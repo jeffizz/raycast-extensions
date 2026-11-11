@@ -28,7 +28,7 @@
       "type": "textfield",
       "required": false,
       "default": "FvmvwvObRqIHojkEGh5N",
-      "description": "One or more Voice IDs separated by commas (or newlines if pasted). Randomly choose one per playback. Blank uses FvmvwvObRqIHojkEGh5N. Each voice must be available to the API key."
+      "description": "One or more Voice IDs separated by commas (or newlines if pasted). With Cache by Voice ID off, choose a voice only on a cache miss and share audio across voices. With it on, choose a voice per playback and cache it separately. Blank uses FvmvwvObRqIHojkEGh5N. Each voice must be available to the API key."
     },
     {
       "name": "elevenEnglishVoiceId",
@@ -36,7 +36,7 @@
       "type": "textfield",
       "required": false,
       "default": "bGnz83yTAb7caZSC7BBz",
-      "description": "One or more Voice IDs separated by commas (or newlines if pasted). Randomly choose one per playback. Blank uses bGnz83yTAb7caZSC7BBz. Each voice must be available to the API key."
+      "description": "One or more Voice IDs separated by commas (or newlines if pasted). With Cache by Voice ID off, choose a voice only on a cache miss and share audio across voices. With it on, choose a voice per playback and cache it separately. Blank uses bGnz83yTAb7caZSC7BBz. Each voice must be available to the API key."
     },
     {
       "name": "elevenModel",
@@ -133,6 +133,15 @@
       "required": false
     },
     {
+      "name": "elevenCacheByVoiceId",
+      "title": "ElevenLabs Voice Cache",
+      "type": "checkbox",
+      "label": "Cache ElevenLabs audio separately by Voice ID",
+      "required": false,
+      "default": false,
+      "description": "Off: reuse audio across voices. On: choose a Voice ID for each playback and cache it separately. Both modes also distinguish language, text, model and effective settings."
+    },
+    {
       "name": "randomFrdicPercentage",
       "title": "Random Strategy — Frdic Percentage",
       "type": "textfield",
@@ -171,6 +180,12 @@
       "title": "Manage ElevenLabs Keys",
       "description": "Add, edit, disable, delete and reactivate API keys; view usage and 7-day cooldowns",
       "mode": "view"
+    },
+    {
+      "name": "clear-audio-cache",
+      "title": "Clear Pronunciation Audio Cache",
+      "description": "Permanently clear cached Frdic and ElevenLabs audio after confirmation",
+      "mode": "no-view"
     },
     {
       "name": "toggle-translation",

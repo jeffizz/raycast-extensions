@@ -16,6 +16,7 @@ export interface Preferences {
   elevenSpeed?: string;
   elevenStability?: string;
   elevenSimilarity?: string;
+  elevenCacheByVoiceId?: boolean;
 }
 
 export function getPreferences(): Preferences {

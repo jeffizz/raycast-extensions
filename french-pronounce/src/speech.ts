@@ -1,9 +1,9 @@
-import { getPreferences, type VoiceName } from "./preferences";
+import { getPreferences, type Preferences, type VoiceName } from "./preferences";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { rm } from "fs/promises";
 import { cachedAudio, readMp3Response } from "./audio-cache";
-import { getElevenConfig, requestElevenAudio } from "./elevenlabs";
+import { chooseVoiceId, elevenRequestBody, getElevenSynthesisConfig, parseVoiceIds, requestElevenAudio } from "./elevenlabs";
 import { chooseRandomProvider, getStrategy, parseFrdicPercentage } from "./strategy";
 import { validateText } from "./text-safety";
 
@@ -34,9 +34,21 @@ async function frdicAudio(text: string, language: Language, voiceName?: VoiceNam
   });
 }
 
-async function elevenAudio(text: string, language: Language): Promise<string> {
-  const config = getElevenConfig(language);
-  return cachedAudio({ provider: "elevenlabs", text, config, format: "mp3_44100_128" }, () => requestElevenAudio(text, config));
+async function elevenAudio(text: string, language: Language, preferences: Preferences): Promise<string> {
+  const synthesis = getElevenSynthesisConfig(language, preferences);
+  // Key includes the actual request body so only effective model settings apply.
+  // The default key remains unchanged; opt-in voice caches are separate.
+  const body = elevenRequestBody(text, synthesis);
+  const identity = { provider: "elevenlabs", language, body, format: "mp3_44100_128" };
+  const voices = language === "fr" ? preferences.elevenFrenchVoiceId : preferences.elevenEnglishVoiceId;
+  if (preferences.elevenCacheByVoiceId === true) {
+    const voiceId = chooseVoiceId(parseVoiceIds(voices, language));
+    return cachedAudio({ ...identity, voiceId }, () => requestElevenAudio(text, { ...synthesis, voiceId }));
+  }
+  return cachedAudio(identity, () => {
+    const voiceId = chooseVoiceId(parseVoiceIds(voices, language));
+    return requestElevenAudio(text, { ...synthesis, voiceId });
+  });
 }
 
 async function playFile(path: string): Promise<void> {
@@ -59,14 +71,14 @@ export async function playSpeech(text: string, language: Language, voiceName?: V
     : strategy;
   let file: string;
   if (provider === "elevenlabs") {
-    file = await elevenAudio(safeText, language);
+    file = await elevenAudio(safeText, language, preferences);
   } else if (provider === "frdic") {
     file = await frdicAudio(safeText, language, voiceName);
   } else {
     try {
       file = await frdicAudio(safeText, language, voiceName);
     } catch {
-      file = await elevenAudio(safeText, language);
+      file = await elevenAudio(safeText, language, preferences);
     }
   }
   await playFile(file);

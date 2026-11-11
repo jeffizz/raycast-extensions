@@ -10,9 +10,9 @@
 type ExtensionPreferences = {
   /** Local Privacy Checks - Heuristically block emails, URLs, credentials, long digit strings and markup. Not a guarantee of privacy. The 175-character and control-character limits always apply. */
   "strictPrivacyChecks": boolean,
-  /** ElevenLabs French Voice IDs - One or more Voice IDs separated by commas (or newlines if pasted). Randomly choose one per playback. Blank uses FvmvwvObRqIHojkEGh5N. Each voice must be available to the API key. */
+  /** ElevenLabs French Voice IDs - One or more Voice IDs separated by commas (or newlines if pasted). With Cache by Voice ID off, choose a voice only on a cache miss and share audio across voices. With it on, choose a voice per playback and cache it separately. Blank uses FvmvwvObRqIHojkEGh5N. Each voice must be available to the API key. */
   "elevenFrenchVoiceId": string,
-  /** ElevenLabs English Voice IDs - One or more Voice IDs separated by commas (or newlines if pasted). Randomly choose one per playback. Blank uses bGnz83yTAb7caZSC7BBz. Each voice must be available to the API key. */
+  /** ElevenLabs English Voice IDs - One or more Voice IDs separated by commas (or newlines if pasted). With Cache by Voice ID off, choose a voice only on a cache miss and share audio across voices. With it on, choose a voice per playback and cache it separately. Blank uses bGnz83yTAb7caZSC7BBz. Each voice must be available to the API key. */
   "elevenEnglishVoiceId": string,
   /** ElevenLabs Model - Enter a model ID (letters, numbers, _, - or .). Examples: eleven_v4, eleven_v4_turbo, eleven_v3, eleven_multilingual_v2, eleven_flash_v2_5, eleven_turbo_v2_5. Blank uses eleven_v4. New IDs are sent without optional settings; check model access and documentation. */
   "elevenModel": string,
@@ -30,6 +30,8 @@ type ExtensionPreferences = {
   "deeplApiKey"?: string,
   /** Translation Toast Duration (Seconds) - Optional. Leave empty for Raycast default behavior. Valid values are integers from 3 to 30. */
   "translationToastDurationSeconds"?: string,
+  /** ElevenLabs Voice Cache - Off: reuse audio across voices. On: choose a Voice ID for each playback and cache it separately. Both modes also distinguish language, text, model and effective settings. */
+  "elevenCacheByVoiceId": boolean,
   /** Random Strategy — Frdic Percentage - Chance of Frdic per pronunciation (0–100, default 50). ElevenLabs gets the remainder. Applies before cache lookup. Random mode does not fall back across providers. */
   "randomFrdicPercentage": string
 }
@@ -48,6 +50,8 @@ declare namespace Preferences {
   export type SpeechStrategy = ExtensionPreferences & {}
   /** Preferences accessible in the `manage-elevenlabs-keys` command */
   export type ManageElevenlabsKeys = ExtensionPreferences & {}
+  /** Preferences accessible in the `clear-audio-cache` command */
+  export type ClearAudioCache = ExtensionPreferences & {}
   /** Preferences accessible in the `toggle-translation` command */
   export type ToggleTranslation = ExtensionPreferences & {}
 }
@@ -63,6 +67,8 @@ declare namespace Arguments {
   export type SpeechStrategy = {}
   /** Arguments passed to the `manage-elevenlabs-keys` command */
   export type ManageElevenlabsKeys = {}
+  /** Arguments passed to the `clear-audio-cache` command */
+  export type ClearAudioCache = {}
   /** Arguments passed to the `toggle-translation` command */
   export type ToggleTranslation = {}
 }

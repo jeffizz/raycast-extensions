@@ -1,4 +1,4 @@
-import { getPreferences } from "./preferences";
+import { getPreferences, type Preferences } from "./preferences";
 import type { Language } from "./speech";
 import { updateKeys } from "./state";
 import { failKey, reserveKey } from "./key-state";
@@ -24,11 +24,14 @@ export function chooseVoiceId(ids: string[]): string {
   return ids.length === 1 ? ids[0] : ids[Math.floor(Math.random() * ids.length)];
 }
 
-export interface ElevenConfig {
-  voiceId: string;
+export interface ElevenSynthesisConfig {
   model: string;
   language: Language;
   settings: { stability: number; similarity_boost: number; style: number; speed: number };
+}
+
+export interface ElevenConfig extends ElevenSynthesisConfig {
+  voiceId: string;
 }
 
 function numeric(value: string | undefined, fallback: number, min: number, max: number, name: string): number {
@@ -40,9 +43,7 @@ function numeric(value: string | undefined, fallback: number, min: number, max: 
   return number;
 }
 
-export function getElevenConfig(language: Language): ElevenConfig {
-  const prefs = getPreferences();
-  const voiceId = chooseVoiceId(parseVoiceIds(language === "fr" ? prefs.elevenFrenchVoiceId : prefs.elevenEnglishVoiceId, language));
+export function getElevenSynthesisConfig(language: Language, prefs: Preferences = getPreferences()): ElevenSynthesisConfig {
   const model = prefs.elevenModel?.trim() || "eleven_v4";
   // Validate syntax, not a fixed allowlist: future model IDs remain usable.
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(model)) {
@@ -51,7 +52,6 @@ export function getElevenConfig(language: Language): ElevenConfig {
   const isV4 = (V4_MODELS as readonly string[]).includes(model);
   const isLegacy = (LEGACY_MODELS as readonly string[]).includes(model);
   return {
-    voiceId,
     language,
     model,
     settings: {
@@ -66,7 +66,13 @@ export function getElevenConfig(language: Language): ElevenConfig {
   };
 }
 
-export function elevenRequestBody(text: string, config: ElevenConfig) {
+export function getElevenConfig(language: Language, prefs: Preferences = getPreferences()): ElevenConfig {
+  const synthesis = getElevenSynthesisConfig(language, prefs);
+  const voiceId = chooseVoiceId(parseVoiceIds(language === "fr" ? prefs.elevenFrenchVoiceId : prefs.elevenEnglishVoiceId, language));
+  return { ...synthesis, voiceId };
+}
+
+export function elevenRequestBody(text: string, config: ElevenSynthesisConfig) {
   const v4 = (V4_MODELS as readonly string[]).includes(config.model);
   const legacy = (LEGACY_MODELS as readonly string[]).includes(config.model);
   const known = v4 || legacy || config.model === "eleven_v3";
