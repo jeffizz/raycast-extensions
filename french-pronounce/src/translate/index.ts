@@ -16,7 +16,7 @@ const engines: Record<string, TranslationEngine> = {
 
 const MIN_TOAST_DURATION_SECONDS = 3;
 const MAX_TOAST_DURATION_SECONDS = 30;
-const MAX_TRANSLATION_TITLE_LENGTH = 33;
+const MAX_TRANSLATION_TITLE_LENGTH = 28;
 
 function getTranslationToastContent(translated: string): { title: string; message?: string } {
   const translatedCharacters = Array.from(translated);
