@@ -7,7 +7,10 @@
 
 /* eslint-disable @typescript-eslint/ban-types */
 
-type ExtensionPreferences = {}
+type ExtensionPreferences = {
+  /** 显示其他变位形式 - 关闭时，每格仅显示词库中的第一种形式；打开时，用 / 分隔显示所有形式。 */
+  "showAlternateForms": boolean
+}
 
 /** Preferences accessible in all the extension's commands */
 declare type Preferences = ExtensionPreferences

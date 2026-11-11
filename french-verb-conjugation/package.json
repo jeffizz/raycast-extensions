@@ -7,6 +7,17 @@
   "author": "jianfeng",
   "categories": ["Education"],
   "license": "MIT",
+  "preferences": [
+    {
+      "name": "showAlternateForms",
+      "title": "显示其他变位形式",
+      "type": "checkbox",
+      "label": "在变位表中显示所有可用形式",
+      "required": false,
+      "default": false,
+      "description": "关闭时，每格仅显示词库中的第一种形式；打开时，用 / 分隔显示所有形式。"
+    }
+  ],
   "commands": [
     {
       "name": "lookup",

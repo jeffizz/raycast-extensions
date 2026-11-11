@@ -3,35 +3,88 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { book, randomVerb } from "./data";
 import { EditMine } from "./edit-mine";
 import { searchVerbs } from "./model";
-import { loadMine, loadStats, randomOf } from "./mine";
+import { loadLookupHistory, loadMine, loadRecentPractices, loadStats, randomOf, type LookupHistoryEntry } from "./mine";
+import { findVerbMatches, type MatchedCell, type VerbMatch } from "./lexik";
 
 export function PickVerb({
   onPick,
   initialQuery = "",
+  initialMatches = [],
+  resolveInflected = false,
 }: {
-  onPick: (infinitive: string) => void;
+  onPick: (infinitive: string, matchedCells?: MatchedCell[]) => void;
   initialQuery?: string;
+  initialMatches?: VerbMatch[];
+  resolveInflected?: boolean;
 }) {
   const [query, setQuery] = useState(initialQuery);
   const [mine, setMine] = useState<string[]>([]);
   const [stats, setStats] = useState<Record<string, number>>({});
+  const [lookupHistory, setLookupHistory] = useState<LookupHistoryEntry[]>([]);
+  const [practiceRecent, setPracticeRecent] = useState<string[]>([]);
   const [selected, setSelected] = useState<string | undefined>();
+  const [reverse, setReverse] = useState<{ query: string; matches: VerbMatch[] }>({ query: initialQuery, matches: initialMatches });
+  const [searching, setSearching] = useState(false);
   const ready = useRef(false);
   const names = useMemo(() => (query.trim() ? searchVerbs(book, query) : book.common), [query]);
 
   useEffect(() => {
-    void Promise.all([loadMine(), loadStats()]).then(([list, s]) => {
+    void Promise.all([loadMine(), loadStats(), loadLookupHistory(), loadRecentPractices()]).then(([list, s, history, recent]) => {
       setMine(list);
       setStats(s);
-      setSelected(list[0] ? `mine-${list[0]}` : book.common[0] ? `common-${book.common[0]}` : undefined);
+      setLookupHistory(history);
+      setPracticeRecent(recent);
+      if (!initialQuery.trim()) {
+        const first = resolveInflected ? history[0]?.name : recent[0];
+        setSelected(first ? `recent-${first}` : list[0] ? `mine-${list[0]}` : book.common[0] ? `common-${book.common[0]}` : undefined);
+      }
       ready.current = true;
     });
   }, []);
 
+  useEffect(() => {
+    const term = query.trim();
+    if (!resolveInflected || !term) {
+      setReverse({ query, matches: [] });
+      setSearching(false);
+      return;
+    }
+    let active = true;
+    setSearching(true);
+    const timer = setTimeout(() => {
+      void findVerbMatches(book, term).then((matches) => {
+        if (!active) return;
+        setReverse({ query, matches });
+        if (matches.length && !searchVerbs(book, query).some((name) => name.toLowerCase() === term.toLowerCase())) {
+          setSelected(`form-${matches[0].infinitive}`);
+        }
+      }).catch((error) => {
+        console.error("LeXiK lookup failed", error);
+        if (active) {
+          setReverse({ query, matches: [] });
+          void showToast({ style: Toast.Style.Failure, title: "动词词形库查询失败", message: "请检查 SQLite 词库是否存在" });
+        }
+      }).finally(() => { if (active) setSearching(false); });
+    }, 180);
+    return () => { active = false; clearTimeout(timer); };
+  }, [query, resolveInflected]);
+
+  const reverseMatches = reverse.query === query ? reverse.matches : [];
+  const showInitial = !query.trim() || (!searching && (!resolveInflected || reverse.query === query) && !names.length && !reverseMatches.length);
+  const recent = resolveInflected ? lookupHistory.map((entry) => entry.name) : practiceRecent;
+  const counts = resolveInflected ? Object.fromEntries(lookupHistory.map((entry) => [entry.name, entry.count])) : stats;
+
+  useEffect(() => {
+    if (!showInitial || !query.trim()) return;
+    const first = recent[0];
+    setSelected(first ? `recent-${first}` : mine[0] ? `mine-${mine[0]}` : book.common[0] ? `common-${book.common[0]}` : undefined);
+  }, [showInitial, query, recent.join("\u0000"), mine.join("\u0000")]);
+
   function onSearch(value: string) {
     setQuery(value);
     if (!value.trim()) {
-      setSelected(mine.length ? `mine-${mine[0]}` : book.common[0] ? `common-${book.common[0]}` : undefined);
+      const first = resolveInflected ? lookupHistory[0]?.name : practiceRecent[0];
+      setSelected(first ? `recent-${first}` : mine.length ? `mine-${mine[0]}` : book.common[0] ? `common-${book.common[0]}` : undefined);
       return;
     }
     const hits = searchVerbs(book, value);
@@ -59,7 +112,8 @@ export function PickVerb({
     <List
       filtering={false}
       throttle
-      searchBarPlaceholder="动词原形，如 aller、être、souvenir"
+      searchBarPlaceholder={resolveInflected ? "动词原形或变位形式，如 pouvoir、peut" : "动词原形，如 aller、être、souvenir"}
+      isLoading={searching}
       searchText={query}
       onSearchTextChange={onSearch}
       selectedItemId={selected}
@@ -68,7 +122,20 @@ export function PickVerb({
         if (id) setSelected(id);
       }}
     >
-      {!query.trim() && (
+      {showInitial && recent.length > 0 && (
+        <List.Section title={resolveInflected ? "最近查询" : "最近练习"}>
+          {recent.map((name) => (
+            <List.Item
+              key={`recent-${name}`}
+              id={`recent-${name}`}
+              title={name}
+              accessories={[{ text: `${counts[name] ?? 0} 次` }]}
+              actions={<ActionPanel><Action title="打开" icon={Icon.Book} onAction={() => onPick(name)} />{extra}</ActionPanel>}
+            />
+          ))}
+        </List.Section>
+      )}
+      {showInitial && (
         <List.Section title={`我的 ${mine.length}`}>
           {mine.length > 0 ? (
             mine.map((name) => (
@@ -76,7 +143,7 @@ export function PickVerb({
                 key={`mine-${name}`}
                 id={`mine-${name}`}
                 title={name}
-                accessories={stats[name] ? [{ text: `${stats[name]} 次` }] : []}
+                accessories={counts[name] ? [{ text: `${counts[name]} 次` }] : []}
                 actions={
                   <ActionPanel>
                     <Action title="打开" icon={Icon.Book} onAction={() => onPick(name)} />
@@ -103,12 +170,31 @@ export function PickVerb({
           )}
         </List.Section>
       )}
-      <List.Section title={query.trim() ? "匹配" : `常用 ${book.common.length}`}>
-        {names.map((name) => (
+      {query.trim() && reverseMatches.length > 0 && (
+        <List.Section title="变位形式匹配">
+          {reverseMatches.map((match) => (
+            <List.Item
+              key={`form-${match.infinitive}`}
+              id={`form-${match.infinitive}`}
+              title={match.infinitive}
+              subtitle={`词形：${query.trim()}`}
+              actions={
+                <ActionPanel>
+                  <Action title="打开变位表" icon={Icon.Book} onAction={() => onPick(match.infinitive, match.matchedCells)} />
+                  {extra}
+                </ActionPanel>
+              }
+            />
+          ))}
+        </List.Section>
+      )}
+      <List.Section title={showInitial ? `常用 ${book.common.length}` : "匹配"}>
+        {(showInitial ? book.common : names).map((name) => (
           <List.Item
-            key={query.trim() ? `match-${name}` : `common-${name}`}
-            id={query.trim() ? `match-${name}` : `common-${name}`}
+            key={showInitial ? `common-${name}` : `match-${name}`}
+            id={showInitial ? `common-${name}` : `match-${name}`}
             title={name}
+            accessories={counts[name] ? [{ text: `${counts[name]} 次` }] : []}
             actions={
               <ActionPanel>
                 <Action title="打开" icon={Icon.Book} onAction={() => onPick(name)} />
@@ -118,7 +204,6 @@ export function PickVerb({
           />
         ))}
       </List.Section>
-      {!names.length && <List.EmptyView title="词库里没有这个原形" />}
     </List>
   );
 }

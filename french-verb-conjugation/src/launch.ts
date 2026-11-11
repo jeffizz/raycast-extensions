@@ -29,7 +29,7 @@ export async function verbFromContext(fallbackText?: string | null): Promise<Lau
 
 function finish(query: string): LaunchVerb {
   const infinitive = resolveVerb(book, query);
-  if (!infinitive) return { query: "", infinitive: null };
+  if (!infinitive) return { query, infinitive: null };
   return { query, infinitive };
 }
 

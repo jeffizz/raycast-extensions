@@ -4,6 +4,46 @@ import { resolveVerb } from "./model";
 
 const KEY = "my-verbs";
 const STATS_KEY = "practice-stats"; // Record<verbName, count>
+const PRACTICE_RECENT_KEY = "practice-recent";
+const LOOKUP_HISTORY_KEY = "lookup-history";
+
+export type LookupHistoryEntry = { name: string; count: number };
+
+export async function loadLookupHistory(): Promise<LookupHistoryEntry[]> {
+  const raw = await LocalStorage.getItem<string>(LOOKUP_HISTORY_KEY);
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((entry): entry is LookupHistoryEntry =>
+      entry && typeof entry.name === "string" && Boolean(book.verbs[entry.name]) &&
+      Number.isInteger(entry.count) && entry.count > 0,
+    );
+  } catch { return []; }
+}
+
+let lookupWrite: Promise<void> = Promise.resolve();
+export function recordLookup(name: string): Promise<void> {
+  const update = lookupWrite.then(async () => {
+    if (!book.verbs[name]) return;
+    const history = await loadLookupHistory();
+    const existing = history.find((entry) => entry.name === name);
+    const next = [{ name, count: (existing?.count ?? 0) + 1 }, ...history.filter((entry) => entry.name !== name)];
+    await LocalStorage.setItem(LOOKUP_HISTORY_KEY, JSON.stringify(next));
+  });
+  lookupWrite = update.then(() => undefined, () => undefined);
+  return update;
+}
+
+export async function loadRecentPractices(): Promise<string[]> {
+  const raw = await LocalStorage.getItem<string>(PRACTICE_RECENT_KEY);
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return [...new Set(parsed.filter((name): name is string => typeof name === "string" && Boolean(book.verbs[name])))];
+  } catch { return []; }
+}
 
 export async function loadMine() {
   const raw = await LocalStorage.getItem<string>(KEY);
@@ -75,8 +115,11 @@ let statsWrite: Promise<void> = Promise.resolve();
 export function incrementPractices(names: string[]): Promise<Record<string, number>> {
   const update = statsWrite.then(async () => {
     const stats = await loadStats();
-    for (const name of new Set(names)) stats[name] = (stats[name] ?? 0) + 1;
+    const unique = [...new Set(names)].filter((name) => Boolean(book.verbs[name]));
+    for (const name of unique) stats[name] = (stats[name] ?? 0) + 1;
     await LocalStorage.setItem(STATS_KEY, JSON.stringify(stats));
+    const recent = await loadRecentPractices();
+    await LocalStorage.setItem(PRACTICE_RECENT_KEY, JSON.stringify([...unique, ...recent.filter((name) => !unique.includes(name))]));
     return stats;
   });
   statsWrite = update.then(() => undefined, () => undefined);

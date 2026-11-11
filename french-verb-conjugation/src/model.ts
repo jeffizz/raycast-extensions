@@ -151,15 +151,40 @@ export function speechLines(infinitive: string, forms: VerbForms, hAspire: boole
   return lines;
 }
 
-export function tableMarkdown(infinitive: string, forms: VerbForms) {
-  const head = `|  | ${TENSES.map((tense) => tense.zh).join(" | ")} |`;
+export function tableMarkdown(
+  infinitive: string,
+  forms: VerbForms,
+  highlights: { tense: number; person: number; form?: string }[] = [],
+  showAlternates = false,
+) {
+  const highlighted = new Map(highlights.map((cell) => [`${cell.tense}:${cell.person}`, cell]));
+  const head = `|  | ${TENSES.map((tense, index) => {
+    const hasHiddenVariants = !showAlternates && (forms.t[index] ?? []).some((cell) => cell && new Set(cell).size > 1);
+    // Escape the asterisk so the Markdown renderer displays it literally.
+    return `${tense.zh}${hasHiddenVariants ? "\\*" : ""}`;
+  }).join(" | ")} |`;
   const rule = `| --- | ${TENSES.map(() => "---").join(" | ")} |`;
   const body = ROWS.map((row, rowIndex) => {
-    const cells = TENSES.map((_, tenseIndex) => showForms(forms.t[tenseIndex]?.[rowIndex]).replaceAll("|", "/"));
+    const cells = TENSES.map((_, tenseIndex) => {
+      const variants = forms.t[tenseIndex]?.[rowIndex] ?? [];
+      const match = highlighted.get(`${tenseIndex}:${rowIndex}`);
+      // If the search targets an alternate spelling, show that spelling even in
+      // single-form mode rather than highlighting a different word.
+      const matchingForm = match?.form
+        ? variants.find((variant) => normAnswer(variant) === normAnswer(match.form!))
+          ?? variants.find((variant) => fold(variant) === fold(match.form!))
+        : undefined;
+      const visible = showAlternates ? variants : matchingForm ? [matchingForm] : variants.slice(0, 1);
+      if (!visible.length) return "—";
+      return visible.map((form) => {
+        const safe = form.replaceAll("|", "/");
+        return match && (!match.form || form === matchingForm) ? `**${safe}**` : safe;
+      }).join(" / ");
+    });
     return `| ${row.label} | ${cells.join(" | ")} |`;
   });
-  const pp = showForms(forms.pp);
-  const prp = showForms(forms.prp);
+  const pp = showForms(showAlternates ? forms.pp : forms.pp.slice(0, 1));
+  const prp = showForms(showAlternates ? forms.prp : forms.prp.slice(0, 1));
   const title = pp === "—" && prp === "—" ? infinitive : `${infinitive} (${pp} / ${prp})`;
   return [`### ${title}`, "", head, rule, ...body].join("\n");
 }

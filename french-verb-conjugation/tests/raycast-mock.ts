@@ -1,3 +1,7 @@
+import { join } from "node:path";
+
+export const environment = { assetsPath: join(process.cwd(), "assets") };
+
 const storage = new Map<string, string>();
 
 export const LocalStorage = {

@@ -1,9 +1,10 @@
-import { Action, ActionPanel, Detail, Icon, showToast, Toast, type Keyboard, type LaunchProps } from "@raycast/api";
+import { Action, ActionPanel, Detail, getPreferenceValues, Icon, showToast, Toast, type Keyboard, type LaunchProps } from "@raycast/api";
+import { useState } from "react";
 import { book, hAspire } from "./data";
 import { EditMine } from "./edit-mine";
 import { speechLines, tableMarkdown, type SpeechLine } from "./model";
 import { addMine, removeMine } from "./mine";
-import { OpenVerb } from "./open-verb";
+import { OpenVerb, type MatchedCell } from "./open-verb";
 import { playSpeech } from "./speech";
 
 const TENSE_KEYS = ["1", "2", "3", "4", "5", "6"] as const;
@@ -12,12 +13,20 @@ export default function LookupCommand(props: LaunchProps) {
   return (
     <OpenVerb
       fallbackText={props.fallbackText}
-      render={({ infinitive, pick }) => <LookupView infinitive={infinitive} onPick={pick} />}
+      resolveInflected
+      render={({ infinitive, matchedCells, pick }) => <LookupView infinitive={infinitive} matchedCells={matchedCells} onPick={pick} />}
     />
   );
 }
 
-function LookupView({ infinitive, onPick }: { infinitive: string; onPick: (infinitive: string) => void }) {
+function LookupView({ infinitive, matchedCells, onPick }: {
+  infinitive: string;
+  matchedCells: MatchedCell[];
+  onPick: (infinitive: string) => void;
+}) {
+  const [showAlternates, setShowAlternates] = useState(
+    () => getPreferenceValues<{ showAlternateForms?: boolean }>().showAlternateForms ?? false,
+  );
   const forms = book.verbs[infinitive];
   if (!forms) return <Detail markdown="没有这个动词" />;
   const lines = speechLines(infinitive, forms, hAspire.has(infinitive));
@@ -25,7 +34,7 @@ function LookupView({ infinitive, onPick }: { infinitive: string; onPick: (infin
   return (
     <Detail
       navigationTitle={infinitive}
-      markdown={`${tableMarkdown(infinitive, forms)}\n\n---\n\n![Conjugation Reference](conjugation-reference.png)`}
+      markdown={`${tableMarkdown(infinitive, forms, matchedCells, showAlternates)}\n\n---\n\n![Conjugation Reference](conjugation-reference.png)`}
       actions={
         <ActionPanel>
           {lines.map((line) => (
@@ -37,6 +46,12 @@ function LookupView({ infinitive, onPick }: { infinitive: string; onPick: (infin
               onAction={() => playSpeech(line.speech, line.zh)}
             />
           ))}
+          <Action
+            title={showAlternates ? "只显示一种变位形式" : "显示所有变位形式"}
+            icon={Icon.Eye}
+            shortcut={{ modifiers: ["cmd", "opt"], key: "v" }}
+            onAction={() => setShowAlternates((current) => !current)}
+          />
           <Action title="换一个动词" icon={Icon.Book} shortcut={{ modifiers: ["cmd"], key: "n" }} onAction={() => onPick("")} />
           <Action
             title="加入我的动词"
