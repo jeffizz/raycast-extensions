@@ -1,6 +1,6 @@
 export interface VocabItem {
   id: string;
-  category: "alphabet" | "cardinal" | "ordinal" | "approx" | "month" | "week" | "color";
+  category: "cardinal" | "ordinal" | "approx" | "month" | "week" | "color" | "alphabet";
   french: string;
   phonetic?: string;
   chinese: string;
@@ -10,34 +10,6 @@ export interface VocabItem {
 }
 
 export const VOCAB_DATA: VocabItem[] = [
-  // --- 26个法语字母（内置本地 MP3 音频）---
-  { id: "alpha_a", category: "alphabet", french: "Aa", phonetic: "[ɑ]", chinese: "字母 A", localAudioFile: "audio/a.mp3" },
-  { id: "alpha_b", category: "alphabet", french: "Bb", phonetic: "[be]", chinese: "字母 B", localAudioFile: "audio/b.mp3" },
-  { id: "alpha_c", category: "alphabet", french: "Cc", phonetic: "[se]", chinese: "字母 C", localAudioFile: "audio/c.mp3" },
-  { id: "alpha_d", category: "alphabet", french: "Dd", phonetic: "[de]", chinese: "字母 D", localAudioFile: "audio/d.mp3" },
-  { id: "alpha_e", category: "alphabet", french: "Ee", phonetic: "[ə]", chinese: "字母 E", localAudioFile: "audio/e.mp3" },
-  { id: "alpha_f", category: "alphabet", french: "Ff", phonetic: "[ɛf]", chinese: "字母 F", localAudioFile: "audio/f.mp3" },
-  { id: "alpha_g", category: "alphabet", french: "Gg", phonetic: "[ʒe]", chinese: "字母 G", localAudioFile: "audio/g.mp3" },
-  { id: "alpha_h", category: "alphabet", french: "Hh", phonetic: "[aʃ]", chinese: "字母 H", localAudioFile: "audio/h.mp3" },
-  { id: "alpha_i", category: "alphabet", french: "Ii", phonetic: "[i]", chinese: "字母 I", localAudioFile: "audio/i.mp3" },
-  { id: "alpha_j", category: "alphabet", french: "Jj", phonetic: "[ʒi]", chinese: "字母 J", localAudioFile: "audio/j.mp3" },
-  { id: "alpha_k", category: "alphabet", french: "Kk", phonetic: "[kɑ]", chinese: "字母 K", localAudioFile: "audio/k.mp3" },
-  { id: "alpha_l", category: "alphabet", french: "Ll", phonetic: "[ɛl]", chinese: "字母 L", localAudioFile: "audio/l.mp3" },
-  { id: "alpha_m", category: "alphabet", french: "Mm", phonetic: "[ɛm]", chinese: "字母 M", localAudioFile: "audio/m.mp3" },
-  { id: "alpha_n", category: "alphabet", french: "Nn", phonetic: "[ɛn]", chinese: "字母 N", localAudioFile: "audio/n.mp3" },
-  { id: "alpha_o", category: "alphabet", french: "Oo", phonetic: "[o]", chinese: "字母 O", localAudioFile: "audio/o.mp3" },
-  { id: "alpha_p", category: "alphabet", french: "Pp", phonetic: "[pe]", chinese: "字母 P", localAudioFile: "audio/p.mp3" },
-  { id: "alpha_q", category: "alphabet", french: "Qq", phonetic: "[ky]", chinese: "字母 Q", localAudioFile: "audio/q.mp3" },
-  { id: "alpha_r", category: "alphabet", french: "Rr", phonetic: "[ɛr]", chinese: "字母 R", localAudioFile: "audio/r.mp3" },
-  { id: "alpha_s", category: "alphabet", french: "Ss", phonetic: "[ɛs]", chinese: "字母 S", localAudioFile: "audio/s.mp3" },
-  { id: "alpha_t", category: "alphabet", french: "Tt", phonetic: "[te]", chinese: "字母 T", localAudioFile: "audio/t.mp3" },
-  { id: "alpha_u", category: "alphabet", french: "Uu", phonetic: "[y]", chinese: "字母 U", localAudioFile: "audio/u.mp3" },
-  { id: "alpha_v", category: "alphabet", french: "Vv", phonetic: "[ve]", chinese: "字母 V", localAudioFile: "audio/v.mp3" },
-  { id: "alpha_w", category: "alphabet", french: "Ww", phonetic: "[dubləve]", chinese: "字母 W", localAudioFile: "audio/w.mp3" },
-  { id: "alpha_x", category: "alphabet", french: "Xx", phonetic: "[iks]", chinese: "字母 X", localAudioFile: "audio/x.mp3" },
-  { id: "alpha_y", category: "alphabet", french: "Yy", phonetic: "[igrɛk]", chinese: "字母 Y", localAudioFile: "audio/y.mp3" },
-  { id: "alpha_z", category: "alphabet", french: "Zz", phonetic: "[zɛd]", chinese: "字母 Z", localAudioFile: "audio/z.mp3" },
-
   // --- 基数词 ---
   { id: "c1", category: "cardinal", french: "un / une", phonetic: "[œ̃] / [yn]", chinese: "1" },
   { id: "c2", category: "cardinal", french: "deux", phonetic: "[dø]", chinese: "2" },
@@ -135,4 +107,33 @@ export const VOCAB_DATA: VocabItem[] = [
   { id: "col9", category: "color", french: "violet / violette", chinese: "紫色", colorHex: "#AF52DE" },
   { id: "col10", category: "color", french: "rose", chinese: "粉红色", colorHex: "#FF2D55" },
   { id: "col11", category: "color", french: "marron", chinese: "棕色", colorHex: "#A2845E" },
+
+  // --- 26个法语字母（内置本地 MP3 音频）---
+  { id: "alpha_a", category: "alphabet", french: "Aa", phonetic: "[ɑ]", chinese: "字母 A", localAudioFile: "audio/a.mp3" },
+  { id: "alpha_b", category: "alphabet", french: "Bb", phonetic: "[be]", chinese: "字母 B", localAudioFile: "audio/b.mp3" },
+  { id: "alpha_c", category: "alphabet", french: "Cc", phonetic: "[se]", chinese: "字母 C", localAudioFile: "audio/c.mp3" },
+  { id: "alpha_d", category: "alphabet", french: "Dd", phonetic: "[de]", chinese: "字母 D", localAudioFile: "audio/d.mp3" },
+  { id: "alpha_e", category: "alphabet", french: "Ee", phonetic: "[ə]", chinese: "字母 E", localAudioFile: "audio/e.mp3" },
+  { id: "alpha_f", category: "alphabet", french: "Ff", phonetic: "[ɛf]", chinese: "字母 F", localAudioFile: "audio/f.mp3" },
+  { id: "alpha_g", category: "alphabet", french: "Gg", phonetic: "[ʒe]", chinese: "字母 G", localAudioFile: "audio/g.mp3" },
+  { id: "alpha_h", category: "alphabet", french: "Hh", phonetic: "[aʃ]", chinese: "字母 H", localAudioFile: "audio/h.mp3" },
+  { id: "alpha_i", category: "alphabet", french: "Ii", phonetic: "[i]", chinese: "字母 I", localAudioFile: "audio/i.mp3" },
+  { id: "alpha_j", category: "alphabet", french: "Jj", phonetic: "[ʒi]", chinese: "字母 J", localAudioFile: "audio/j.mp3" },
+  { id: "alpha_k", category: "alphabet", french: "Kk", phonetic: "[kɑ]", chinese: "字母 K", localAudioFile: "audio/k.mp3" },
+  { id: "alpha_l", category: "alphabet", french: "Ll", phonetic: "[ɛl]", chinese: "字母 L", localAudioFile: "audio/l.mp3" },
+  { id: "alpha_m", category: "alphabet", french: "Mm", phonetic: "[ɛm]", chinese: "字母 M", localAudioFile: "audio/m.mp3" },
+  { id: "alpha_n", category: "alphabet", french: "Nn", phonetic: "[ɛn]", chinese: "字母 N", localAudioFile: "audio/n.mp3" },
+  { id: "alpha_o", category: "alphabet", french: "Oo", phonetic: "[o]", chinese: "字母 O", localAudioFile: "audio/o.mp3" },
+  { id: "alpha_p", category: "alphabet", french: "Pp", phonetic: "[pe]", chinese: "字母 P", localAudioFile: "audio/p.mp3" },
+  { id: "alpha_q", category: "alphabet", french: "Qq", phonetic: "[ky]", chinese: "字母 Q", localAudioFile: "audio/q.mp3" },
+  { id: "alpha_r", category: "alphabet", french: "Rr", phonetic: "[ɛr]", chinese: "字母 R", localAudioFile: "audio/r.mp3" },
+  { id: "alpha_s", category: "alphabet", french: "Ss", phonetic: "[ɛs]", chinese: "字母 S", localAudioFile: "audio/s.mp3" },
+  { id: "alpha_t", category: "alphabet", french: "Tt", phonetic: "[te]", chinese: "字母 T", localAudioFile: "audio/t.mp3" },
+  { id: "alpha_u", category: "alphabet", french: "Uu", phonetic: "[y]", chinese: "字母 U", localAudioFile: "audio/u.mp3" },
+  { id: "alpha_v", category: "alphabet", french: "Vv", phonetic: "[ve]", chinese: "字母 V", localAudioFile: "audio/v.mp3" },
+  { id: "alpha_w", category: "alphabet", french: "Ww", phonetic: "[dubləve]", chinese: "字母 W", localAudioFile: "audio/w.mp3" },
+  { id: "alpha_x", category: "alphabet", french: "Xx", phonetic: "[iks]", chinese: "字母 X", localAudioFile: "audio/x.mp3" },
+  { id: "alpha_y", category: "alphabet", french: "Yy", phonetic: "[igrɛk]", chinese: "字母 Y", localAudioFile: "audio/y.mp3" },
+  { id: "alpha_z", category: "alphabet", french: "Zz", phonetic: "[zɛd]", chinese: "字母 Z", localAudioFile: "audio/z.mp3" },
+
 ];

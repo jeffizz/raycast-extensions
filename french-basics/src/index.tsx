@@ -6,13 +6,13 @@ import { toFrenchCardinal, toFrenchOrdinal, getFrenchApproximate } from "./utils
 import path from "path";
 
 const CATEGORY_NAMES: Record<string, string> = {
-  alphabet: "🔤 26个字母",
   cardinal: "🔢 基数词",
   ordinal: "🥇 序数词",
   approx: "📦 概数名词",
   week: "📅 星期",
   month: "🗓️ 月份",
   color: "🎨 颜色",
+  alphabet: "🔤 26个字母",
 };
 
 function escapeXml(unsafe: string): string {
@@ -170,17 +170,17 @@ export default function Command() {
       inset={Grid.Inset.Zero}
       searchText={searchText}
       onSearchTextChange={setSearchText}
-      searchBarPlaceholder="搜索词汇/字母，或直接输入数字 (如: 71)..."
+      searchBarPlaceholder="搜索词汇或直接输入数字 (如: 71)..."
       searchBarAccessory={
         <Grid.Dropdown tooltip="筛选词汇分类" onChange={setCategoryFilter}>
           <Grid.Dropdown.Item title="全部分类" value="all" />
-          <Grid.Dropdown.Item title="🔤 26个字母" value="alphabet" />
           <Grid.Dropdown.Item title="🔢 基数词" value="cardinal" />
           <Grid.Dropdown.Item title="🥇 序数词" value="ordinal" />
           <Grid.Dropdown.Item title="📦 概数名词" value="approx" />
           <Grid.Dropdown.Item title="📅 星期" value="week" />
           <Grid.Dropdown.Item title="🗓️ 月份" value="month" />
           <Grid.Dropdown.Item title="🎨 颜色" value="color" />
+          <Grid.Dropdown.Item title="🔤 26个字母" value="alphabet" />
         </Grid.Dropdown>
       }
     >
