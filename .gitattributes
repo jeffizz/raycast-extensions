@@ -1,0 +1,2 @@
+french-verb-conjunction/assets/lexik-verbs.sqlite filter=lfs diff=lfs merge=lfs -text
+french-basics/assets/noun-lexicon.sqlite filter=lfs diff=lfs merge=lfs -text
