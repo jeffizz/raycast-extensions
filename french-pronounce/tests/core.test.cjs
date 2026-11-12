@@ -34,18 +34,19 @@ Module._load = function(request, parent, main) {
   return originalLoad.call(this, request, parent, main);
 };
 const { validateText, characterCount } = require('../src/text-safety.ts');
-const { reserveKey, failKey, reactivateKey, refreshExpiredKeys, COOLDOWN_MS } = require('../src/key-state.ts');
+const { reserveKey, failKey, reactivateKey, migrateKeyState } = require('../src/key-state.ts');
+const { classify } = require('../src/elevenlabs-errors.ts');
 const { updateKeys } = require('../src/state.ts');
 const { getStrategy, setStrategy, cycleStrategy, parseFrdicPercentage, chooseRandomProvider } = require('../src/strategy.ts');
 const { requestElevenAudio, getElevenConfig, elevenRequestBody, parseVoiceIds, DEFAULT_VOICES } = require('../src/elevenlabs.ts');
-const { describeElevenError } = require('../src/elevenlabs-errors.ts');
+const { describeElevenError, describeElevenFailure } = require('../src/elevenlabs-errors.ts');
 const { playSpeech } = require('../src/speech.ts');
 const { speakAndMaybeTranslate } = require('../src/workflow.ts');
 const { isMp3, cachedAudio, clearAudioCache } = require('../src/audio-cache.ts');
 const clearAudioCacheCommand = require('../src/clear-audio-cache.tsx').default;
 const { formatConjugation, stripBoundaryParentheses } = require('../src/conjugation.ts');
 const audio = Buffer.concat([Buffer.from('ID3'), Buffer.alloc(200)]);
-const key = (id) => ({ id, label: id, secret: `sk_${id.repeat(20)}`, enabled: true, createdAt: 1, requests: 0, submittedCharacters: 0, successfulCharacters: 0, failures: 0, cycleCharacters: 0, cycleFailures: 0 });
+const key = (id) => ({ id, label: id, secret: `sk_${id.repeat(20)}`, enabled: true, weight: 1, createdAt: 1, requests: 0, submittedCharacters: 0, successfulCharacters: 0, failures: 0, cycleCharacters: 0, cycleFailures: 0 });
 function reset() { storage.clear(); playbackError = false; translations = 0; confirmAnswer = false; confirmOptions = undefined; hudMessages = []; preferences = { strictPrivacyChecks: true, translationEngine: 'none', elevenFrenchVoiceId: 'FrenchVoice', elevenEnglishVoiceId: 'EnglishVoice' }; }
 const response = () => new Response(audio, { headers: { 'Content-Type': 'audio/mpeg' } });
 
@@ -59,22 +60,34 @@ test('Unicode limits, normalization and privacy heuristics', () => {
   assert.equal(validateText('name@example.com', false), 'name@example.com');
   assert.throws(() => validateText('a\0b', false));
 });
-test('round robin skips disabled/cooling keys and resets at exact 7-day expiry', () => {
-  const state = { keys: [key('a'), key('b'), key('c')] };
-  assert.equal(reserveKey(state, [], 7, 100).id, 'a');
-  assert.equal(reserveKey(state, [], 7, 100).id, 'b');
-  failKey(state.keys[1], 'HTTP 401', 100);
-  state.keys[2].enabled = false;
-  assert.equal(reserveKey(state, [], 7, 100).id, 'a');
-  assert.equal(refreshExpiredKeys(state, 100 + COOLDOWN_MS - 1), false);
-  assert.equal(refreshExpiredKeys(state, 100 + COOLDOWN_MS), true);
-  assert.equal(state.keys[1].lastError, undefined);
-  assert.equal(state.keys[1].cycleCharacters, 0);
-  assert.equal(state.keys[1].submittedCharacters, 7);
-  assert.equal(state.keys[1].failures, 1);
-  assert.equal(reserveKey(state, ['a'], 7, 100 + COOLDOWN_MS).id, 'b');
-  failKey(state.keys[1], 'HTTP 500'); reactivateKey(state.keys[1]);
-  assert.equal(state.keys[1].cycleFailures, 0);
+test('weighted random selection skips disabled/invalid keys; manual reactivation restores them', () => {
+  const state = { keys: [{ ...key('a'), weight: 3 }, { ...key('b'), weight: 1 }] };
+  const original = Math.random;
+  try {
+    Math.random = () => 0.74; assert.equal(reserveKey(state, [], 7).id, 'a'); // 2.96 < 3
+    Math.random = () => 0.75; assert.equal(reserveKey(state, [], 7).id, 'b'); // 3.0 falls to b
+    failKey(state.keys[0], 'HTTP 401', true);
+    Math.random = () => 0.1; assert.equal(reserveKey(state, [], 7).id, 'b'); // invalid key skipped, no timer
+    assert.equal(state.keys[0].invalid, true);
+    assert.equal(state.keys[0].submittedCharacters, 7);
+    assert.equal(state.keys[0].failures, 1);
+    reactivateKey(state.keys[0]);
+    assert.equal(state.keys[0].invalid, undefined);
+    assert.equal(state.keys[0].lastError, undefined);
+    assert.equal(state.keys[0].cycleCharacters, 0);
+    assert.equal(reserveKey(state, [], 7).id, 'a');
+    state.keys[0].enabled = false; assert.equal(reserveKey(state, [], 7).id, 'b');
+    assert.equal(reserveKey(state, ['b'], 7), undefined);
+  } finally { Math.random = original; }
+});
+test('legacy cooldown records migrate to invalid, weights default to 1', () => {
+  const state = { keys: [{ ...key('a'), weight: undefined, blockedUntil: 12345 }, key('b')], lastUsedId: 'a' };
+  migrateKeyState(state);
+  assert.equal(state.keys[0].invalid, true);
+  assert.equal(state.keys[0].blockedUntil, undefined);
+  assert.equal(state.keys[0].weight, 1);
+  assert.equal(state.keys[1].invalid, undefined);
+  assert.equal(state.lastUsedId, undefined);
 });
 test('strategy defaults, cycles and persists', async () => {
   reset(); assert.equal(await getStrategy(), 'fallback');
@@ -97,11 +110,13 @@ test('ElevenLabs rotates on error, counts attempts, and enforces language', asyn
   assert.equal(JSON.parse(calls[0].body).language_code, 'fr');
   assert.notEqual(calls[0].headers['xi-api-key'], calls[1].headers['xi-api-key']);
   const keys = await updateKeys((state) => state.keys);
-  assert.equal(keys[0].lastError, 'HTTP 401');
-  assert.equal(keys[0].submittedCharacters, 7);
-  assert.equal(keys[0].successfulCharacters, 0);
-  assert.ok(keys[0].blockedUntil > Date.now());
-  assert.equal(keys[1].successfulCharacters, 7);
+  const failed = keys.find((item) => item.invalid);
+  const working = keys.find((item) => !item.invalid);
+  assert.equal(failed.secret, calls[0].headers['xi-api-key']);
+  assert.equal(failed.lastError, 'HTTP 401');
+  assert.equal(failed.submittedCharacters, 7);
+  assert.equal(failed.successfulCharacters, 0);
+  assert.equal(working.successfulCharacters, 7);
 });
 test('all failures terminate after each available key once, including network and invalid audio', async () => {
   reset(); await updateKeys((state) => { state.keys = [key('a'), key('b')]; });
@@ -109,8 +124,8 @@ test('all failures terminate after each available key once, including network an
   global.fetch = async () => { if (++count === 1) throw new Error('timeout'); return new Response('{}', { headers: { 'Content-Type': 'application/json' } }); };
   await assert.rejects(requestElevenAudio('salut', getElevenConfig('fr')), /All attempted/);
   assert.equal(count, 2);
-  await assert.rejects(requestElevenAudio('salut', getElevenConfig('fr')), /No active/);
-  assert.equal(count, 2);
+  await assert.rejects(requestElevenAudio('salut', getElevenConfig('fr')), /All attempted/); // transient errors keep keys active
+  assert.equal(count, 4);
 });
 test('model settings validated before key use; multilingual omits language_code', async () => {
   reset(); preferences.elevenModel = 'eleven_flash_v2_5'; preferences.elevenSpeed = 'NaN';
@@ -176,7 +191,7 @@ test('v4 default sends only supported settings; v3 snaps stability and omits spe
   preferences.elevenModel = 'eleven_v3'; preferences.elevenStability = '0.65';
   assert.deepEqual(elevenRequestBody('bonjour', getElevenConfig('fr')).voice_settings, { stability: 0.5 });
 });
-test('402 includes provider diagnostics, redacts credentials/text, and retains cooldown policy', async () => {
+test('402 plan/voice restriction is recorded with diagnostics but does NOT mark the key invalid', async () => {
   reset(); const saved = key('a');
   await updateKeys((state) => { state.keys = [saved]; });
   global.fetch = async () => new Response(JSON.stringify({ detail: { status: 'paid_plan_required', message: `Paid plan required for this voice. secret=${saved.secret}, input=bonjour` } }), { status: 402 });
@@ -187,13 +202,43 @@ test('402 includes provider diagnostics, redacts credentials/text, and retains c
   });
   const records = await updateKeys((state) => state.keys);
   assert.match(records[0].lastError, /Paid plan required/);
-  assert.ok(records[0].blockedUntil > Date.now());
+  assert.equal(records[0].invalid, undefined);
+  assert.equal(records[0].failures, 1);
+});
+test('invalid key (401) and exhausted credits (quota_exceeded / insufficient_credits) mark the key invalid', async () => {
+  reset(); await updateKeys((state) => { state.keys = [key('a'), key('b'), key('c')]; });
+  const bodies = [
+    [401, { detail: { status: 'invalid_api_key', message: 'Invalid key' } }],
+    [402, { detail: { status: 'quota_exceeded', message: 'Not enough credits' } }],
+    [402, { detail: { code: 'insufficient_credits', message: 'Account needs credits' } }],
+  ];
+  const expected = [true, true, true];
+  for (let i = 0; i < bodies.length; i++) {
+    const [status, body] = bodies[i];
+    global.fetch = async () => new Response(JSON.stringify(body), { status });
+    const failure = await describeElevenFailure(new Response(JSON.stringify(body), { status }), []);
+    assert.equal(failure.invalidatesKey, expected[i]);
+  }
+  global.fetch = async () => new Response('{}', { status: 402 });
+  assert.equal(classify(402, []), false);
+});
+test('transient errors (429, 5xx, 403, timeouts, network, invalid audio) do not mark the key invalid', async () => {
+  for (const status of [400, 403, 404, 422, 429, 500, 502, 503]) assert.equal(classify(status, []), false, `status ${status}`);
+  assert.equal(classify(403, ['detail_access_denied']), false);
+  reset(); await updateKeys((state) => { state.keys = [key('a'), key('b')]; });
+  let count = 0;
+  global.fetch = async () => { if (++count === 1) throw new Error('timeout'); return new Response('{}', { headers: { 'Content-Type': 'application/json' } }); };
+  await assert.rejects(requestElevenAudio('salut', getElevenConfig('fr')), /All attempted/);
+  const after = await updateKeys((state) => state.keys);
+  assert.equal(after.filter((k) => k.invalid).length, 0);
+  assert.equal(after.filter((k) => k.failures > 0).length, 2);
 });
 test('error decoder supports new code/type schema; discards non-JSON and oversized bodies', async () => {
   const description = await describeElevenError(new Response(JSON.stringify({ detail: { code: 'insufficient_credits', type: 'payment_required', message: 'Account needs credits' } }), { status: 402 }), []);
   assert.match(description, /insufficient_credits/); assert.match(description, /payment_required/);
   assert.equal(await describeElevenError(new Response('<html>private</html>', { status: 502 }), []), 'HTTP 502');
   assert.equal(await describeElevenError(new Response(JSON.stringify({ detail: { message: 'a'.repeat(20000) } }), { status: 402 }), []), 'HTTP 402');
+  assert.equal((await describeElevenFailure(new Response(JSON.stringify({ detail: { message: 'a'.repeat(20000) } }), { status: 402 }), [])).invalidatesKey, false);
 });
 test('successful frdic and ElevenLabs caches stay separate and survive switching back', async () => {
   reset(); await updateKeys((state) => { state.keys = [key('a')]; });
@@ -273,14 +318,14 @@ test('freeform model handles whitespace, future IDs, v4 turbo, and invalid value
   preferences.elevenModel = 'invalid model'; assert.throws(() => getElevenConfig('fr'), /Invalid ElevenLabs model/);
   preferences.elevenModel = '../bad'; assert.throws(() => getElevenConfig('fr'), /Invalid ElevenLabs model/);
 });
-test('unknown model ID is sent to API and API rejection follows normal cooldown', async () => {
+test('unknown model ID is sent to API and API rejection marks the key invalid', async () => {
   reset(); await updateKeys((state) => { state.keys = [key('a')]; }); preferences.elevenModel = 'future_model_v1';
   global.fetch = async (_url, options) => {
     assert.deepEqual(JSON.parse(options.body), { text: 'hello', model_id: 'future_model_v1' });
     return new Response(JSON.stringify({ detail: { status: 'model_not_found', message: 'Unknown model' } }), { status: 400 });
   };
   await assert.rejects(requestElevenAudio('hello', getElevenConfig('en')), /model_not_found/);
-  assert.ok((await updateKeys((state) => state.keys))[0].blockedUntil > Date.now());
+  assert.equal((await updateKeys((state) => state.keys))[0].invalid, undefined); // 400 is not an auth error
 });
 test('random percentage defaults, validation and boundaries', () => {
   assert.equal(parseFrdicPercentage(undefined), 50);
@@ -317,7 +362,7 @@ test('random provider failure never falls back to the other provider', async () 
   preferences.randomFrdicPercentage = '0';
   await assert.rejects(playSpeech('random-eleven-failure-test', 'en'), /All attempted ElevenLabs keys failed/);
   assert.equal(calls.length, 2); assert.ok(calls[1].includes('elevenlabs'));
-  assert.ok((await updateKeys((state) => state.keys))[0].blockedUntil > Date.now());
+  assert.equal((await updateKeys((state) => state.keys))[0].invalid, undefined); // 503 is transient
 });
 test('missing ElevenLabs keys fail only when random mode chooses ElevenLabs', async () => {
   reset(); await setStrategy('random'); global.fetch = async () => response();

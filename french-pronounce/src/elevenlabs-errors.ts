@@ -17,12 +17,22 @@ function redact(value: string, sensitive: string[]): string {
     .replace(/\s+/g, " ").trim().slice(0, 500);
 }
 
+/** Provider codes meaning the account has no credits/quota left (any HTTP status). */
+const CREDIT_CODES = new Set(["quota_exceeded", "insufficient_credits"]);
+
+export interface ElevenFailure {
+  description: string;
+  /** True only for authentication failures (HTTP 401) or exhausted credits. Such keys are marked Invalid. */
+  invalidatesKey: boolean;
+}
+
 /** Accept only bounded JSON error fields, not arbitrary HTML/raw bodies. */
-export async function describeElevenError(response: Response, sensitive: string[]): Promise<string> {
+export async function describeElevenFailure(response: Response, sensitive: string[]): Promise<ElevenFailure> {
   const prefix = `HTTP ${response.status}`;
+  const plain = { description: prefix, invalidatesKey: classify(response.status, []) };
   let body: unknown;
   try {
-    if (!response.body) return prefix;
+    if (!response.body) return plain;
     const reader = response.body.getReader();
     const chunks: Uint8Array[] = [];
     let size = 0;
@@ -31,20 +41,39 @@ export async function describeElevenError(response: Response, sensitive: string[
         const { done, value } = await reader.read();
         if (done) break;
         size += value.byteLength;
-        if (size > MAX_ERROR_BYTES) return prefix;
+        if (size > MAX_ERROR_BYTES) return plain;
         chunks.push(value);
       }
       body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     } finally { await reader.cancel(); }
-  } catch { return prefix; }
-  if (!body || typeof body !== "object") return prefix;
+  } catch { return plain; }
+  if (!body || typeof body !== "object") return plain;
   const root = body as Record<string, unknown>;
   const detail = root.detail && typeof root.detail === "object" && !Array.isArray(root.detail)
     ? root.detail as Record<string, unknown> : root;
-  const codes = [detail.code, detail.status, detail.type]
-    .filter((value): value is string => typeof value === "string" && /^[a-z][a-z0-9_]{1,63}$/.test(value))
-    .map((value) => redact(value, sensitive));
+  // Codes are matched on the raw values; only the redacted text is ever stored.
+  const rawCodes = [detail.code, detail.status, detail.type]
+    .filter((value): value is string => typeof value === "string" && /^[a-z][a-z0-9_]{1,63}$/.test(value));
+  const codes = rawCodes.map((value) => redact(value, sensitive));
   const message = typeof detail.message === "string" ? redact(detail.message, sensitive) : "";
   const code = [...new Set(codes)].join(" / ");
-  return `${prefix}${code ? ` [${code}]` : ""}${message ? `: ${message}` : ""}`;
+  return {
+    description: `${prefix}${code ? ` [${code}]` : ""}${message ? `: ${message}` : ""}`,
+    invalidatesKey: classify(response.status, rawCodes),
+  };
+}
+
+/** Backward-compatible string form used for display only. */
+export async function describeElevenError(response: Response, sensitive: string[]): Promise<string> {
+  return (await describeElevenFailure(response, sensitive)).description;
+}
+
+/**
+ * Only authentication (401) or credit exhaustion marks a key Invalid.
+ * Everything else (403 plan/voice restrictions, 402 plan/billing notices, 400 model/voice,
+ * 429, 5xx, timeouts, network, invalid audio) is recorded but does not disable the key.
+ */
+export function classify(status: number, codes: string[]): boolean {
+  if (status === 401) return true;
+  return codes.some((code) => CREDIT_CODES.has(code));
 }

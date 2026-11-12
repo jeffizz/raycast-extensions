@@ -178,7 +178,7 @@
     {
       "name": "manage-elevenlabs-keys",
       "title": "Manage ElevenLabs Keys",
-      "description": "Add, edit, disable, delete and reactivate API keys; view usage and 7-day cooldowns",
+      "description": "Add, edit, weight, disable, delete and reactivate API keys; view usage and Invalid status",
       "mode": "view"
     },
     {

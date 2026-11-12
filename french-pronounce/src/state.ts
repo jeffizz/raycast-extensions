@@ -1,7 +1,7 @@
 import { environment, LocalStorage } from "@raycast/api";
 import { mkdir, rmdir, stat } from "fs/promises";
 import { join } from "path";
-import { refreshExpiredKeys, type KeyState } from "./key-state";
+import { migrateKeyState, type KeyState } from "./key-state";
 
 const STORAGE_KEY = "elevenlabs-keys-v1";
 
@@ -29,7 +29,7 @@ export async function updateKeys<T>(work: (state: KeyState) => T): Promise<T> {
   return withStateLock(async () => {
     const raw = await LocalStorage.getItem<string>(STORAGE_KEY);
     const state: KeyState = raw ? JSON.parse(raw) : { keys: [] };
-    refreshExpiredKeys(state);
+    migrateKeyState(state);
     const result = work(state);
     await LocalStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     return result;

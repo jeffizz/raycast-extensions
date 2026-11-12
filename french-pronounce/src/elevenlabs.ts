@@ -3,7 +3,7 @@ import type { Language } from "./speech";
 import { updateKeys } from "./state";
 import { failKey, reserveKey } from "./key-state";
 import { characterCount } from "./text-safety";
-import { describeElevenError } from "./elevenlabs-errors";
+import { describeElevenFailure } from "./elevenlabs-errors";
 
 export const DEFAULT_VOICES = { fr: "FvmvwvObRqIHojkEGh5N", en: "bGnz83yTAb7caZSC7BBz" } as const;
 const LEGACY_MODELS = ["eleven_multilingual_v2", "eleven_flash_v2_5", "eleven_turbo_v2_5"] as const;
@@ -109,6 +109,8 @@ export async function requestElevenAudio(text: string, config: ElevenConfig): Pr
     attempted.push(key.id);
     let audio: Buffer;
     let safeError = "Network error or timeout";
+    // Network errors, timeouts, 429, 5xx and invalid audio do not disable the key.
+    let invalidate = false;
     try {
       const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(config.voiceId)}?output_format=mp3_44100_128`, {
         method: "POST",
@@ -118,7 +120,9 @@ export async function requestElevenAudio(text: string, config: ElevenConfig): Pr
         body: JSON.stringify(elevenRequestBody(text, config)),
       });
       if (!response.ok) {
-        safeError = await describeElevenError(response, [...secrets, text]);
+        const failure = await describeElevenFailure(response, [...secrets, text]);
+        safeError = failure.description;
+        invalidate = failure.invalidatesKey;
         throw new Error(safeError);
       }
       const { readMp3Response } = await import("./audio-cache");
@@ -128,7 +132,7 @@ export async function requestElevenAudio(text: string, config: ElevenConfig): Pr
       lastError = safeError;
       await updateKeys((state) => {
         const current = state.keys.find((item) => item.id === key.id && item.secret === key.secret);
-        if (current) failKey(current, safeError);
+        if (current) failKey(current, safeError, invalidate);
       });
       continue;
     }
