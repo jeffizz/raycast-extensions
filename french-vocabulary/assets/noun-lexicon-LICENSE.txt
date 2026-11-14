@@ -1,0 +1,9 @@
+Offline noun lexicon: derived from LeXiK by Lectura and contributors.
+Source and attribution: https://lexique.lectura.world/ and https://lexique.lectura.world/licences
+Source downloads: https://lexique.lectura.world/telechargements/lexik/
+License: Creative Commons Attribution-ShareAlike 4.0 International
+https://creativecommons.org/licenses/by-sa/4.0/
+
+This dataset has been modified: all noun entries were extracted, ranked, linked with their gender counterparts, and converted to SQLite. The ranking combines OpenSubtitles, Wikipedia, and Gutenberg frequencies. The MIT license declared for source code does not replace the CC BY-SA license for this dataset. Upstream LeXiK incorporates other open lexical sources; see its licensing and attribution pages for details.
+
+The dataset is provided as-is, without warranties. See NOUN_DATA_SOURCES.md in the project for regeneration instructions.

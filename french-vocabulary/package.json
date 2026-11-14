@@ -1,0 +1,149 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "french-vocabulary",
+  "title": "French Vocabulary",
+  "description": "A local-first French vocabulary notebook, confusion workbench, and practice library with WebDAV backups.",
+  "icon": "icon.png",
+  "author": "jianfeng",
+  "categories": [
+    "Education",
+    "Productivity"
+  ],
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "browse",
+      "title": "Browse Vocabulary",
+      "description": "Browse, annotate, compare, and select vocabulary for practice",
+      "mode": "view"
+    },
+    {
+      "name": "practice",
+      "title": "Practice Vocabulary",
+      "description": "Practice spelling, meanings, and noun genders",
+      "mode": "view"
+    },
+    {
+      "name": "import-vocabulary",
+      "title": "Import Vocabulary",
+      "description": "Paste vocabulary from Excel with column detection and duplicate preview",
+      "mode": "view"
+    },
+    {
+      "name": "groups",
+      "title": "Confusion Groups",
+      "description": "Compare and maintain groups of easily confused words",
+      "mode": "view"
+    },
+    {
+      "name": "dashboard",
+      "title": "Vocabulary Dashboard",
+      "description": "Learning statistics, backups, WebDAV restore, and library health",
+      "mode": "view"
+    },
+    {
+      "name": "archive",
+      "title": "Archived Vocabulary",
+      "description": "Browse and restore archived vocabulary",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "languageMode",
+      "type": "dropdown",
+      "title": "Translation Display",
+      "description": "Applies to vocabulary details, comparisons, and practice.",
+      "required": false,
+      "default": "zh-first",
+      "data": [
+        {
+          "title": "Chinese First",
+          "value": "zh-first"
+        },
+        {
+          "title": "English First",
+          "value": "en-first"
+        },
+        {
+          "title": "Chinese Only",
+          "value": "zh-only"
+        },
+        {
+          "title": "English Only",
+          "value": "en-only"
+        }
+      ]
+    },
+    {
+      "name": "listPOS",
+      "type": "dropdown",
+      "title": "List Part of Speech",
+      "description": "Show only the first POS, on the right or below the word.",
+      "required": false,
+      "default": "right",
+      "data": [
+        {
+          "title": "Right",
+          "value": "right"
+        },
+        {
+          "title": "Below Word",
+          "value": "below"
+        },
+        {
+          "title": "Hidden",
+          "value": "hidden"
+        }
+      ]
+    },
+    {
+      "name": "webdavUrl",
+      "type": "textfield",
+      "title": "WebDAV Backup Folder",
+      "description": "Full HTTPS URL of a dedicated existing folder. Create the folder on the server first.",
+      "required": false
+    },
+    {
+      "name": "webdavUsername",
+      "type": "textfield",
+      "title": "WebDAV Username",
+      "description": "Username for HTTP Basic authentication.",
+      "required": false
+    },
+    {
+      "name": "webdavPassword",
+      "type": "password",
+      "title": "WebDAV Password",
+      "description": "App password recommended. Never included in backups.",
+      "required": false
+    },
+    {
+      "name": "autoBackup",
+      "type": "checkbox",
+      "title": "Automatic WebDAV Backup",
+      "label": "Check backup intervals during browsing and practice",
+      "description": "Uses JSON increments and periodic SQLite snapshots while a command is running. Configure intervals and inspect status in Dashboard. Restore the remote library first on a new computer.",
+      "required": false,
+      "default": false
+    }
+  ],
+  "scripts": {
+    "dev": "ray develop",
+    "build": "ray build -e dist",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "format": "prettier --write 'src/**/*.{ts,tsx}' 'tests/**/*.ts'"
+  },
+  "dependencies": {
+    "@raycast/api": "^2.12.1",
+    "ts-fsrs": "5.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.0",
+    "prettier": "^3.5.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.0"
+  }
+}
