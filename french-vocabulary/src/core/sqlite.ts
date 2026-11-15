@@ -331,12 +331,13 @@ export class Store {
     );
     return path;
   }
-  async resetLibrary() {
+  async resetLibrary(expected?: { revision: number; libraryId: string }) {
     await this.backupLocal("before-reset");
     await this.init();
     await sqlite(
       this.path,
       `BEGIN IMMEDIATE;
+      ${expected ? `CREATE TEMP TABLE reset_guard(ok INTEGER CHECK(ok=1)); INSERT INTO reset_guard VALUES((SELECT CASE WHEN json_extract(value,'$.revision')=${expected.revision} AND json_extract(value,'$.libraryId')=${sql(expected.libraryId)} THEN 1 ELSE 0 END FROM meta WHERE key='header'));` : ""}
       DELETE FROM reviews; DELETE FROM cards; DELETE FROM groups_data; DELETE FROM words;
       UPDATE meta SET value=json_set(value,'$.revision',json_extract(value,'$.revision')+1,'$.settings',json('{}')) WHERE key='header';
       COMMIT;`,

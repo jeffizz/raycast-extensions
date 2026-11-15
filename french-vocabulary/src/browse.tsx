@@ -2,6 +2,7 @@ import {
   Action,
   ActionPanel,
   Color,
+  confirmAlert,
   Form,
   Icon,
   List,
@@ -16,10 +17,17 @@ import {
   recentMistakes,
 } from "./core/presentation";
 import { autoBackup, preferences, report, store, useLibrary } from "./runtime";
-import { stopSpeech } from "./speech";
+import { speakWord, stopSpeech } from "./speech";
 import { AddToGroup, WordActions, wordMarkdown } from "./components/word";
 import ImportVocabulary from "./import-vocabulary";
 import { statusIcon } from "./components/status";
+import { addModeWords, practiceModes } from "./core/practice-settings";
+import {
+  ProcessingSession,
+  startProcessing,
+  processingWords,
+  finishProcessingWord,
+} from "./core/processing";
 export type Filters = { pos: string; familiarity: string; practice: string };
 const defaults: Filters = { pos: "all", familiarity: "all", practice: "all" };
 export default function Browse() {
@@ -37,7 +45,46 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
     [shuffle, setShuffle] = useState(0),
     [visibleCount, setVisibleCount] = useState(80),
     [recentErrors, setRecentErrors] = useState(false);
+  const [session, setSession] = useState<ProcessingSession>();
+  const [processing, setProcessing] = useState(false);
+  const [sessionLoading, setSessionLoading] = useState(true);
+  const sessionLock = useRef(false);
+  const sessionKey = archived ? "processing-archive" : "processing-active";
+  useEffect(() => {
+    if (loading) return;
+    let cancelled = false;
+    setSessionLoading(true);
+    void store
+      .getMeta<ProcessingSession | null>(sessionKey)
+      .then((saved) => {
+        if (!cancelled) {
+          setSession(saved?.libraryId === lib.libraryId ? saved : undefined);
+          setSessionLoading(false);
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) setSessionLoading(false);
+        void report(e);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, lib.libraryId, sessionKey]);
+  const updateSession = async (next: ProcessingSession | undefined) => {
+    await store.setMeta(sessionKey, next ?? null);
+    setSession(next);
+  };
+  const activityOrder = useRef<
+    { libraryId: string; ids: string[] } | undefined
+  >(undefined);
+  if (!loading && activityOrder.current?.libraryId !== lib.libraryId) {
+    activityOrder.current = {
+      libraryId: lib.libraryId,
+      ids: sortWords(lib.words, lib, "activity", new Map()).map((w) => w.id),
+    };
+  }
   const random = useRef(new Map<string, number>());
+  const speaking = useRef(false);
   const viewQueue = useRef(Promise.resolve());
   const seen = useRef<string | undefined>(undefined);
   useEffect(
@@ -53,7 +100,9 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
       seen.current = selection;
       viewQueue.current = viewQueue.current
         .then(() => store.touchWord(selection))
-        .then(() => { void autoBackup(); })
+        .then(() => {
+          void autoBackup();
+        })
         .catch(report);
     }, 450);
     return () => clearTimeout(timer);
@@ -63,6 +112,10 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
     await refresh();
   }, [refresh]);
   const words = useMemo(() => {
+    const remaining =
+      processing && session
+        ? new Set(processingWords(lib, session, archived).map((w) => w.id))
+        : undefined;
     for (const w of lib.words)
       if (!random.current.has(w.id)) random.current.set(w.id, Math.random());
     const recentIds = recentErrors ? recentMistakes(lib) : [];
@@ -71,6 +124,7 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
       lib.words.filter(
         (w) =>
           w.archived === archived &&
+          (!remaining || remaining.has(w.id)) &&
           (!recentErrors || recent.has(w.id)) &&
           (filter.familiarity === "all" ||
             (filter.familiarity === "fuzzy"
@@ -94,12 +148,32 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
       sort,
       random.current,
     );
+    if (sort === "activity" && !recentErrors) {
+      const ranks = new Map(activityOrder.current?.ids.map((id, i) => [id, i]));
+      result.sort(
+        (a, b) => (ranks.get(a.id) ?? Infinity) - (ranks.get(b.id) ?? Infinity),
+      );
+    }
     const ranks = new Map(recentIds.map((id, index) => [id, index]));
     return recentErrors
       ? result.sort((a, b) => ranks.get(a.id)! - ranks.get(b.id)!)
       : result;
-  }, [lib, filter, query, sort, archived, shuffle, recentErrors]);
-  const batch = async (kind: "add" | "remove" | "archive", ids = marked) => {
+  }, [
+    lib,
+    filter,
+    query,
+    sort,
+    archived,
+    shuffle,
+    recentErrors,
+    processing,
+    session,
+  ]);
+  const batch = async (
+    kind: "add" | "remove" | "archive",
+    ids = marked,
+    targets: string[] = ["default"],
+  ) => {
     try {
       await viewQueue.current;
       const set = new Set(ids);
@@ -110,12 +184,15 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
             else setPractice(w, kind === "add");
             w.updatedAt = new Date().toISOString();
           }
+        if (kind === "add") addModeWords(l, ids, targets);
       });
       setMarked([]);
       await safeRefresh();
       await autoBackup();
+      return true;
     } catch (e) {
       await report(e);
+      return false;
     }
   };
   const mark = (id: string) =>
@@ -125,18 +202,131 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
       <BatchPicker
         words={words}
         initial={marked}
-        onSave={async (ids) => {
-          await batch("add", ids);
-          pop();
+        onSave={async (ids, targets) => {
+          if (await batch("add", ids, targets)) pop();
         }}
       />,
     );
   const markedSet = useMemo(() => new Set(marked), [marked]);
-  const activeId = selection ?? words[0]?.id;
+  const activeId = words.some((w) => w.id === selection)
+    ? selection
+    : words[0]?.id;
   const visibleWords = words.slice(0, visibleCount);
   useEffect(() => {
     setVisibleCount(80);
   }, [query, filter, sort, recentErrors]);
+  const markDone = async () => {
+    if (!session || !activeId || sessionLock.current) return;
+    sessionLock.current = true;
+    try {
+      const index = words.findIndex((w) => w.id === activeId);
+      await updateSession(finishProcessingWord(session, activeId));
+      setSelection(words[index + 1]?.id ?? words[index - 1]?.id);
+      setMarked((ids) => ids.filter((id) => id !== activeId));
+    } catch (e) {
+      await report(e);
+    } finally {
+      sessionLock.current = false;
+    }
+  };
+  const processingActions = (
+    <ActionPanel.Section title="Processing Session">
+      {processing ? (
+        <>
+          <Action
+            title="Mark as Done"
+            shortcut={{ modifiers: ["cmd", "shift"], key: "d" }}
+            onAction={markDone}
+          />
+          <Action
+            title="Pause Processing Session"
+            onAction={() => {
+              setProcessing(false);
+              setMarked([]);
+              setSelection(undefined);
+            }}
+          />
+        </>
+      ) : (
+        <>
+          {session && (
+            <Action
+              title="Resume Processing Session"
+              shortcut={{ modifiers: ["cmd", "shift"], key: "p" }}
+              onAction={() => {
+                setProcessing(true);
+                setQuery("");
+                setMarked([]);
+                setSelection(undefined);
+              }}
+            />
+          )}
+          <Action
+            title="Start Processing Session"
+            shortcut={
+              session ? undefined : { modifiers: ["cmd", "shift"], key: "p" }
+            }
+            onAction={async () => {
+              if (sessionLoading || sessionLock.current || !words.length)
+                return;
+              sessionLock.current = true;
+              try {
+                if (
+                  session &&
+                  !(await confirmAlert({
+                    title: "Replace saved processing session?",
+                    message:
+                      "Reset progress and start a new session with all words in this library view.",
+                  }))
+                )
+                  return;
+                await updateSession(
+                  startProcessing(
+                    lib.libraryId,
+                    lib.words.filter((w) => w.archived === archived),
+                  ),
+                );
+                setProcessing(true);
+                setQuery("");
+                setMarked([]);
+                setSelection(undefined);
+              } catch (e) {
+                await report(e);
+              } finally {
+                sessionLock.current = false;
+              }
+            }}
+          />
+        </>
+      )}
+      {session && (
+        <Action
+          title="Discard Processing Session"
+          style={Action.Style.Destructive}
+          onAction={async () => {
+            if (sessionLock.current) return;
+            sessionLock.current = true;
+            try {
+              if (
+                !(await confirmAlert({
+                  title: "Discard processing progress?",
+                  message: "Vocabulary and practice data are not changed.",
+                }))
+              )
+                return;
+              await updateSession(undefined);
+              setProcessing(false);
+              setSelection(undefined);
+            } catch (e) {
+              await report(e);
+            } finally {
+              sessionLock.current = false;
+            }
+          }}
+        />
+      )}
+    </ActionPanel.Section>
+  );
   const accessories = (w: Word): List.Item.Accessory[] => {
     const source = statusIcon(w),
       pos = preferences().listPOS;
@@ -163,7 +353,7 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
   };
   return (
     <List
-      isLoading={loading}
+      isLoading={loading || sessionLoading}
       isShowingDetail
       pagination={{
         pageSize: 80,
@@ -173,13 +363,19 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
       filtering={false}
       searchText={query}
       onSearchTextChange={setQuery}
-      selectedItemId={selection}
+      selectedItemId={activeId}
       onSelectionChange={(id) => {
         setSelection(id ?? undefined);
         stopSpeech();
       }}
-      navigationTitle={archived ? "Archived Vocabulary" : "French Vocabulary"}
-      searchBarPlaceholder="Search vocabulary…"
+      navigationTitle={
+        processing
+          ? `Processing Session · ${words.length} Remaining`
+          : archived
+            ? "Archived Vocabulary"
+            : "French Vocabulary"
+      }
+      searchBarPlaceholder={"Search vocabulary…"}
       searchBarAccessory={
         <List.Dropdown
           tooltip="Browse Order / Recent Mistakes"
@@ -200,16 +396,14 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
       }
       actions={
         <ActionPanel>
+          {processingActions}
           <Action
             title="Import Vocabulary"
             onAction={() => push(<ImportVocabulary onImported={safeRefresh} />)}
           />
           <Action
-            title={recentErrors ? "Show All Words" : "Recent Mistakes (7 Days)"}
-            onAction={() => setRecentErrors((x) => !x)}
-          />
-          <Action
             title="Filters"
+            shortcut={{ modifiers: ["cmd"], key: "f" }}
             onAction={() =>
               push(<FilterForm initial={filter} onSave={setFilter} />)
             }
@@ -217,7 +411,14 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
         </ActionPanel>
       }
     >
-      <List.EmptyView title="No matching vocabulary" />
+      <List.EmptyView
+        title={"No matching vocabulary"}
+        description={
+          processing
+            ? "Change search or filters to find remaining words, or pause this session."
+            : undefined
+        }
+      />
       <List.Section
         title={`${words.length}${marked.length ? ` · ${marked.length} selected` : ""}`}
       >
@@ -245,6 +446,22 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
             actions={
               w.id === activeId ? (
                 <ActionPanel>
+                  <Action
+                    title="Speak"
+                    icon={Icon.SpeakerHigh}
+                    onAction={async () => {
+                      if (speaking.current) return;
+                      speaking.current = true;
+                      try {
+                        await speakWord(w);
+                      } catch (e) {
+                        await report(e);
+                      } finally {
+                        speaking.current = false;
+                      }
+                    }}
+                  />
+                  {processingActions}
                   {marked.length > 0 && (
                     <Action
                       title={`Add ${marked.length} Selected Words to Practice`}
@@ -273,8 +490,6 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
                     />
                     <Action
                       title="Add Selection to Practice"
-                      icon={Icon.CheckList}
-                      shortcut={{ modifiers: ["cmd", "shift"], key: "t" }}
                       onAction={batchForm}
                     />
                     {marked.length > 0 && (
@@ -286,6 +501,7 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
                         />
                         <Action
                           title="Remove Selection from Practice"
+                          shortcut={{ modifiers: ["cmd", "shift"], key: "t" }}
                           onAction={() => batch("remove")}
                         />
                         <Action
@@ -303,19 +519,9 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
                     )}
                   </ActionPanel.Section>
                   <Action
-                    title={
-                      recentErrors
-                        ? "Show All Words"
-                        : "Recent Mistakes (7 Days)"
-                    }
-                    icon={Icon.ExclamationMark}
-                    shortcut={{ modifiers: ["cmd", "shift"], key: "e" }}
-                    onAction={() => setRecentErrors((x) => !x)}
-                  />
-                  <Action
                     title="Filters"
                     icon={Icon.Filter}
-                    shortcut={{ modifiers: ["cmd", "shift"], key: "f" }}
+                    shortcut={{ modifiers: ["cmd"], key: "f" }}
                     onAction={() =>
                       push(<FilterForm initial={filter} onSave={setFilter} />)
                     }
@@ -362,16 +568,32 @@ function BatchPicker({
 }: {
   words: Word[];
   initial: string[];
-  onSave: (ids: string[]) => Promise<void>;
+  onSave: (ids: string[], targets: string[]) => Promise<void>;
 }) {
+  const [busy, setBusy] = useState(false);
   return (
     <Form
+      isLoading={busy}
       navigationTitle="Add Selection to Practice"
       actions={
         <ActionPanel>
           <Action.SubmitForm
             title="Add Selected Words"
-            onSubmit={(v: { ids: string[] }) => onSave(v.ids)}
+            onSubmit={async (v: { ids: string[]; targets: string[] }) => {
+              if (busy) return;
+              if (!v.ids.length || !v.targets.length) {
+                await report(
+                  Error("Choose at least one word and one destination."),
+                );
+                return;
+              }
+              setBusy(true);
+              try {
+                await onSave(v.ids, v.targets);
+              } finally {
+                setBusy(false);
+              }
+            }}
           />
         </ActionPanel>
       }
@@ -381,6 +603,17 @@ function BatchPicker({
           <Form.TagPicker.Item key={w.id} value={w.id} title={w.word} />
         ))}
       </Form.TagPicker>
+      <Form.TagPicker
+        id="targets"
+        title="Practice Libraries"
+        defaultValue={["default"]}
+      >
+        <Form.TagPicker.Item value="default" title="Default Library" />
+        {practiceModes.map(({ mode, title }) => (
+          <Form.TagPicker.Item key={mode} value={mode} title={title} />
+        ))}
+      </Form.TagPicker>
+      <Form.Description text="Mode destinations append words to that mode’s selected list and activate Selected Words Only. All added words are globally enabled for practice; other modes using Default Library can also include them. Remove Selection from Practice disables them across all modes." />
     </Form>
   );
 }

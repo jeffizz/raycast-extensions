@@ -67,7 +67,11 @@ export type ModeSettings = {
 };
 export type LibrarySettings = {
   practice?: Partial<Record<Mode, ModeSettings>>;
-  backup?: { fullHours: number; incrementalMinutes: number };
+  backup?: {
+    fullHours: number;
+    incrementalMinutes: number;
+    retainFull?: number;
+  };
 };
 export type Library = {
   version: 1;
@@ -221,7 +225,11 @@ export function validateLibrary(value: unknown): asserts value is Library {
         policy.fullHours > 8760 ||
         !Number.isFinite(policy.incrementalMinutes) ||
         policy.incrementalMinutes < 1 ||
-        policy.incrementalMinutes > 1440)
+        policy.incrementalMinutes > 1440 ||
+        (policy.retainFull !== undefined &&
+          (!Number.isSafeInteger(policy.retainFull) ||
+            policy.retainFull < 1 ||
+            policy.retainFull > 100)))
     )
       throw Error("Invalid backup intervals.");
   }

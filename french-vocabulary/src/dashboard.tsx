@@ -14,9 +14,17 @@ import {
   useNavigation,
 } from "@raycast/api";
 import { useEffect, useState } from "react";
-import { readFile, rm, stat } from "node:fs/promises";
+import { readFile, writeFile, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  archiveBeforeReset,
+  isResetArchive,
+  downloadResetArchive,
+  deleteResetArchive,
+  listRemoteFiles,
+  remoteManifest,
+  Manifest,
+  RemoteFile,
   backupRemote,
   backupPolicy,
   BackupState,
@@ -38,6 +46,7 @@ import {
 } from "./runtime";
 import { escapeMD, WordActions, wordMarkdown } from "./components/word";
 import { PracticeSettings } from "./components/practice-settings";
+import { modeSettings, practiceModes } from "./core/practice-settings";
 export default function Dashboard() {
   const { lib, loading, refresh } = useLibrary(),
     { push } = useNavigation();
@@ -77,15 +86,26 @@ export default function Dashboard() {
     !sameTarget ||
     backup?.revision !== lib.revision ||
     backup?.libraryId !== lib.libraryId;
-  const stats = `# Learning Overview\n\n| Metric | Count |\n|---|---:|\n| Active words | ${active.length} |\n| Senses | ${active.reduce((n, w) => n + w.senses.length, 0)} |\n| Archived | ${lib.words.length - active.length} |\n| Fuzzy | ${active.filter((w) => w.familiarity === "fuzzy" || w.familiarity === "unknown").length} |\n| Know | ${active.filter((w) => w.familiarity === "known").length} |\n| Included in practice | ${active.filter((w) => w.practice).length} |\n| Recall attempts | ${reviews.length} |\n| Recall mistakes | ${wrong.length} |\n| Copying attempts | ${lib.reviews.length - reviews.length} |\n\n## Practice Dimensions\n\n${(
+  const stats = `# Learning Overview\n\n| Metric | Count |\n|---|---:|\n| Fuzzy | ${active.filter((w) => w.familiarity === "fuzzy" || w.familiarity === "unknown").length} |\n| Know | ${active.filter((w) => w.familiarity === "known").length} |\n| Recall attempts | ${reviews.length} |\n| Recall mistakes | ${wrong.length} |\n| Copying attempts | ${lib.reviews.length - reviews.length} |\n\n## Practice Dimensions\n\n${(
     ["meaning", "spelling", "gender"] as const
   )
     .map((mode) => {
       const r = reviews.filter((r) => r.mode === mode);
       return `* **${mode}:** ${questions(lib, mode).length} due/new · ${r.length ? r.filter((x) => x.correct).length + " / " + r.length + " correct" : "no attempts"}`;
     })
-    .join("\n")}\n\n**Confusion groups:** ${lib.groups.length}`;
-  const health = `# Library & Backup\n\n**SQLite** ${(size / 1024 / 1024).toFixed(2)} MB · revision ${lib.revision}\n\n**WebDAV** ${p.webdavUrl ? (pending ? "Backup pending" : "Backed up") : "Not configured"}\n\n**Automatic backup** ${p.autoBackup ? "On" : "Off"}\n\n**Last backup / restore** ${backup?.at ? new Date(backup.at).toLocaleString() : "—"}\n\n${backup?.error ? `**Error** ${escapeMD(backup.error)}\n\n` : ""}**Last full snapshot** ${backup?.fullAt ? new Date(backup.fullAt).toLocaleString() : "—"}\n\n**Latest upload** ${backup?.kind ?? "—"} · ${backup?.increments ?? 0} increments\n\n**Intervals** ${backupPolicy(lib).incrementalMinutes} minutes incremental · ${backupPolicy(lib).fullHours} hours full\n\n${backup?.cleanupPending?.length ? `**Cleanup pending:** ${backup.cleanupPending.length} obsolete increment files.\n\n` : ""}Restore downloads the SQLite snapshot and applies verified JSON increments in order. Full backup publication happens before obsolete increments are deleted. Old full snapshots are retained. Automatic checks run only during plugin activity.\n\nCredentials and audio stay on this computer. A safety copy is created automatically before imports and restores; no manual local backup is required.`;
+    .join("\n")}`;
+  const backupStatus = !p.webdavUrl
+    ? "Not configured"
+    : sameTarget && backup?.error
+      ? "Backup error"
+      : !sameTarget || !backup?.at
+        ? "No Backup Recorded"
+        : pending
+          ? "Unbacked Changes"
+          : "Backed up";
+  const tracked = sameTarget ? backup : undefined;
+  const libraryOverview = `# Library Overview\n\n| Metric | Count |\n|---|---:|\n| Total words | ${lib.words.length} |\n| Active words | ${active.length} |\n| Archived words | ${lib.words.length - active.length} |\n| Total senses | ${lib.words.reduce((n, w) => n + w.senses.length, 0)} |\n| Active words in practice | ${active.filter((w) => w.practice).length} |\n| Review records | ${lib.reviews.length} |\n| Confusion groups | ${lib.groups.length} |\n\n## Mode-specific Word Lists\n\n${practiceModes.map(({ mode, title }) => `* **${title}:** ${modeSettings(lib, mode).wordIds.length} selected`).join("\n")}\n\n**SQLite:** ${(size / 1024 / 1024).toFixed(2)} MB\n\n**Revision:** ${lib.revision}\n\n**Library ID:** ${escapeMD(lib.libraryId)}\n\nSelected-list membership is separate from card eligibility.`;
+  const health = `# Backup & Restore\n\n**Status:** ${backupStatus}\n\n**Automatic backup:** ${p.autoBackup ? "On" : "Off"}\n\n**Last backup / restore:** ${tracked?.at ? new Date(tracked.at).toLocaleString() : "—"}\n\n**Last full snapshot:** ${tracked?.fullAt ? new Date(tracked.fullAt).toLocaleString() : "—"}\n\n**Latest upload:** ${tracked?.kind ?? "—"} · ${tracked?.increments ?? 0} increments\n\n**Intervals:** ${backupPolicy(lib).incrementalMinutes} minutes incremental · ${backupPolicy(lib).fullHours} hours full\n\n**Full snapshots to keep:** ${backupPolicy(lib).retainFull} (including active)\n\n${tracked?.error ? `**Error:** ${escapeMD(tracked.error)}\n\n` : ""}${tracked?.cleanupPending?.length ? `**Cleanup pending:** ${tracked.cleanupPending.length} obsolete files.\n\n` : ""}Use **Browse Remote Files** to inspect the live snapshot, incremental chain, retained snapshots and permanent pre-reset archives, including archive download/delete actions. Unbacked Changes means the local revision differs from the last recorded backup; it does not mean an upload is running. Viewing words also updates activity records. No Backup Recorded means no backup is recorded for this destination. This summary reflects local tracking, not a live server query.\n\nRestore verifies the full snapshot and JSON increments before replacement. Local safety copies are created before restores. Permanent pre-reset archives do not expire automatically. Automatic checks run only during extension activity. Credentials and audio are not backed up.`;
 
   const run = async (fn: () => Promise<void>) => {
     if (busy) return;
@@ -103,10 +123,42 @@ export default function Dashboard() {
       setBusy(false);
     }
   };
+  const restoreAction = (
+    <Action
+      title="Restore from WebDAV"
+      icon={Icon.Download}
+      onAction={async () => {
+        if (busy) return;
+        if (
+          !(await confirmAlert({
+            title: "Download and preview the WebDAV backup?",
+            message:
+              "This downloads and verifies the remote backup. Local vocabulary will not change until you review the preview and confirm replacement.",
+            primaryAction: { title: "Download and Preview" },
+          }))
+        )
+          return;
+        await run(async () => {
+          const c = webdavConfig(),
+            download = await downloadBackup(c);
+          push(
+            <RestorePreview
+              library={download.library}
+              source={`WebDAV · ${download.manifest.at}`}
+              commit={async () => {
+                await restoreRemote(store, c, download);
+                await reload();
+              }}
+            />,
+          );
+        });
+      }}
+    />
+  );
   const backupActions = (
     <>
       <Action
-        title="Create Full SQLite Backup Now"
+        title="Manual Full Backup"
         icon={Icon.Upload}
         onAction={() =>
           run(async () => {
@@ -122,28 +174,9 @@ export default function Dashboard() {
           })
         }
       />
+      {restoreAction}
       <Action
-        title="Restore Latest Backup from WebDAV"
-        icon={Icon.Download}
-        onAction={() =>
-          run(async () => {
-            const c = webdavConfig(),
-              download = await downloadBackup(c);
-            push(
-              <RestorePreview
-                library={download.library}
-                source={`WebDAV · ${download.manifest.at}`}
-                commit={async () => {
-                  await restoreRemote(store, c, download);
-                  await reload();
-                }}
-              />,
-            );
-          })
-        }
-      />
-      <Action
-        title="Verify Remote Snapshot and Increments"
+        title="Check Remote Backup Health"
         icon={Icon.CheckCircle}
         onAction={() =>
           run(async () => {
@@ -157,7 +190,7 @@ export default function Dashboard() {
         }
       />
       <Action
-        title="Export Portable Backup"
+        title="Export Backup File"
         icon={Icon.Document}
         onAction={() => push(<ExportForm />)}
       />
@@ -165,16 +198,6 @@ export default function Dashboard() {
         title="Restore from Backup File"
         icon={Icon.Download}
         onAction={() => push(<FileRestore onRestored={reload} />)}
-      />
-      <Action
-        title="Reset Entire Library"
-        icon={Icon.Trash}
-        style={Action.Style.Destructive}
-        onAction={() => push(<ResetLibrary onReset={reload} />)}
-      />
-      <Action.ShowInFinder
-        title="Reveal Database Folder"
-        path={environment.supportPath}
       />
       <Action
         title="Open Extension Preferences"
@@ -203,56 +226,50 @@ export default function Dashboard() {
         title="Learning Overview"
         icon={Icon.BarChart}
         detail={<List.Item.Detail markdown={stats} />}
-        actions={<ActionPanel>{backupActions}</ActionPanel>}
+        actions={
+          <ActionPanel>
+            <Action title="Refresh" onAction={reload} />
+          </ActionPanel>
+        }
       />
       <List.Item
         title="Practice Settings"
         icon={Icon.Gear}
         detail={
-          <List.Item.Detail markdown="# Practice Settings\n\nConfigure pronunciation and selected word lists independently for every practice mode." />
+          <List.Item.Detail
+            markdown={
+              "# Practice Settings\n\nConfigure automatic pronunciation independently for every practice mode."
+            }
+          />
         }
         actions={
           <ActionPanel>
             <Action
-              title="Configure Practice Modes"
+              title="Practice Settings"
               onAction={() => push(<PracticeSettings onSaved={reload} />)}
             />
           </ActionPanel>
         }
       />
       <List.Item
-        title="Backup Schedule"
-        icon={Icon.Clock}
-        detail={
-          <List.Item.Detail
-            markdown={`# Backup Schedule\n\nIncremental: ${backupPolicy(lib).incrementalMinutes} minutes\n\nFull: ${backupPolicy(lib).fullHours} hours\n\nChecks run during ordinary browsing, editing and practice, not while Raycast is closed. Automatic backup must be enabled in extension preferences.`}
-          />
-        }
-        actions={
-          <ActionPanel>
-            <Action
-              title="Configure Backup Intervals"
-              onAction={() => push(<BackupSchedule onSaved={reload} />)}
-            />
-          </ActionPanel>
-        }
-      />
-      <List.Item
-        title="Library and Backup Health"
+        title="Library Overview"
         icon={Icon.HardDrive}
-        subtitle={
-          !p.webdavUrl
-            ? "Not configured"
-            : backup?.error && sameTarget
-              ? "Backup error"
-              : pending
-                ? "Backup pending"
-                : "Backed up"
-        }
-        detail={<List.Item.Detail markdown={health} />}
+        detail={<List.Item.Detail markdown={libraryOverview} />}
         actions={
           <ActionPanel>
-            {backupActions}
+            <Action title="Refresh" onAction={reload} />
+            <Action.ShowInFinder
+              title="Reveal Database Folder"
+              path={environment.supportPath}
+            />
+            {restoreAction}
+            <Action
+              title="Reset Entire Library"
+              icon={Icon.Trash}
+              style={Action.Style.Destructive}
+              onAction={() => push(<ResetLibrary onReset={reload} />)}
+            />
+
             <Action
               title="Clear Audio Cache"
               onAction={() =>
@@ -270,6 +287,26 @@ export default function Dashboard() {
                 })
               }
             />
+          </ActionPanel>
+        }
+      />
+      <List.Item
+        title="Backup & Restore"
+        icon={Icon.Cloud}
+        subtitle={backupStatus}
+        detail={<List.Item.Detail markdown={health} />}
+        actions={
+          <ActionPanel>
+            <Action
+              title="Browse Remote Files"
+              onAction={() => push(<RemoteBackupStatus />)}
+            />
+            <Action
+              title="Backup Settings"
+              icon={Icon.Gear}
+              onAction={() => push(<BackupSchedule onSaved={reload} />)}
+            />
+            {backupActions}
           </ActionPanel>
         }
       />
@@ -291,6 +328,181 @@ export default function Dashboard() {
     </List>
   );
 }
+function RemoteBackupStatus() {
+  const { push } = useNavigation();
+  const [files, setFiles] = useState<RemoteFile[]>([]);
+  const [manifest, setManifest] = useState<Manifest>();
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(true);
+  const [checked, setChecked] = useState("");
+  const refresh = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const config = webdavConfig();
+      const results = await Promise.allSettled([
+        remoteManifest(config),
+        listRemoteFiles(config),
+      ]);
+      setManifest(
+        results[0].status === "fulfilled"
+          ? results[0].value.manifest
+          : undefined,
+      );
+      setFiles(results[1].status === "fulfilled" ? results[1].value : []);
+      setError(
+        results
+          .filter((r) => r.status === "rejected")
+          .map((r) => (r.status === "rejected" ? String(r.reason) : ""))
+          .join("\n"),
+      );
+      setChecked(new Date().toLocaleString());
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  useEffect(() => {
+    void refresh();
+  }, []);
+  const role = (name: string) =>
+    isResetArchive(name)
+      ? "Permanent pre-reset archive"
+      : name === "latest.json"
+        ? "Backup index"
+        : name === manifest?.file
+          ? "Active full snapshot"
+          : manifest?.increments?.some((d) => d.file === name)
+            ? "Active increment"
+            : manifest?.fullHistory?.includes(name)
+              ? "Retained full snapshot"
+              : "Untracked file (not automatically deleted)";
+  const actions = (
+    <ActionPanel>
+      <Action
+        title="Refresh Remote Status"
+        shortcut={{ modifiers: ["cmd"], key: "r" }}
+        onAction={refresh}
+      />
+    </ActionPanel>
+  );
+  return (
+    <List
+      isLoading={busy}
+      isShowingDetail
+      navigationTitle="Backup Status & Remote Files"
+      actions={actions}
+    >
+      <List.Item
+        title="Remote Backup Overview"
+        detail={
+          <List.Item.Detail
+            markdown={`# Remote Backup\n\nChecked: ${checked || "—"}\n\n${error ? escapeMD(error) + "\n\n" : ""}${manifest ? `Revision: ${manifest.revision}\n\nLast backup: ${new Date(manifest.at).toLocaleString()}\n\nActive snapshot: ${escapeMD(manifest.file)}\n\nActive increments: ${manifest.increments?.length ?? 0}\n\nTracked full snapshots: ${manifest.fullHistory?.length ?? 1}` : "No readable backup index."}\n\nListed files: ${files.length}\n\nThis view reads metadata only; it does not verify file contents or change remote files.`}
+          />
+        }
+        actions={actions}
+      />
+      {files.map((file) => (
+        <List.Item
+          key={file.name}
+          title={file.name}
+          subtitle={role(file.name)}
+          detail={
+            <List.Item.Detail
+              markdown={`# ${escapeMD(file.name)}\n\n${role(file.name)}\n\nSize: ${file.size === undefined ? "Unknown" : (file.size / 1024 / 1024).toFixed(2) + " MB"}\n\nModified: ${file.modified && Number.isFinite(Date.parse(file.modified)) ? new Date(file.modified).toLocaleString() : "Unknown"}`}
+            />
+          }
+          actions={
+            isResetArchive(file.name) ? (
+              <ActionPanel>
+                <Action
+                  title="Download Reset Archive"
+                  onAction={() =>
+                    push(<DownloadResetArchive file={file.name} />)
+                  }
+                />
+                <Action
+                  title="Delete Reset Archive Permanently"
+                  style={Action.Style.Destructive}
+                  onAction={async () => {
+                    if (
+                      !(await confirmAlert({
+                        title: "Permanently delete this reset archive?",
+                        message: file.name,
+                        primaryAction: {
+                          title: "Delete Archive",
+                          style: Alert.ActionStyle.Destructive,
+                        },
+                      }))
+                    )
+                      return;
+                    try {
+                      await deleteResetArchive(webdavConfig(), file.name);
+                      await refresh();
+                    } catch (e) {
+                      await report(e);
+                    }
+                  }}
+                />
+                <Action title="Refresh Remote Status" onAction={refresh} />
+              </ActionPanel>
+            ) : (
+              actions
+            )
+          }
+        />
+      ))}
+    </List>
+  );
+}
+function DownloadResetArchive({ file }: { file: string }) {
+  const { pop } = useNavigation();
+  const [busy, setBusy] = useState(false);
+  return (
+    <Form
+      isLoading={busy}
+      navigationTitle="Download Reset Archive"
+      actions={
+        <ActionPanel>
+          <Action.SubmitForm
+            title="Download Archive"
+            onSubmit={async (values: { folder: string[] }) => {
+              if (busy) return;
+              setBusy(true);
+              try {
+                if (!values.folder?.[0])
+                  throw Error("Choose a destination folder.");
+                const bytes = await downloadResetArchive(webdavConfig(), file);
+                const path = join(values.folder[0], file);
+                await writeFile(path, bytes, { flag: "wx", mode: 0o600 });
+                await showToast({
+                  style: Toast.Style.Success,
+                  title: "Archive downloaded",
+                  message: path,
+                });
+                pop();
+              } catch (e) {
+                await report(e);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+        </ActionPanel>
+      }
+    >
+      <Form.FilePicker
+        id="folder"
+        title="Destination Folder"
+        canChooseDirectories
+        canChooseFiles={false}
+        allowMultipleSelection={false}
+      />
+      <Form.Description text="Download and verify the standalone SQLite archive. Existing files are never overwritten. Restore it using Restore from Backup File." />
+    </Form>
+  );
+}
 function BackupSchedule({ onSaved }: { onSaved: () => Promise<void> }) {
   const { lib, loading } = useLibrary(false);
   const { pop } = useNavigation();
@@ -300,29 +512,34 @@ function BackupSchedule({ onSaved }: { onSaved: () => Promise<void> }) {
   return (
     <Form
       isLoading={busy}
-      navigationTitle="Backup Schedule"
+      navigationTitle="Backup Settings"
       actions={
         <ActionPanel>
           <Action.SubmitForm
-            title="Save Backup Intervals"
+            title="Save Backup Settings"
             onSubmit={async (values: {
               fullHours: string;
               incrementalMinutes: string;
+              retainFull: string;
             }) => {
               if (busy) return;
               const fullHours = Number(values.fullHours),
-                incrementalMinutes = Number(values.incrementalMinutes);
+                incrementalMinutes = Number(values.incrementalMinutes),
+                retainFull = Number(values.retainFull);
               if (
                 !Number.isFinite(fullHours) ||
                 fullHours < 1 ||
                 fullHours > 8760 ||
                 !Number.isFinite(incrementalMinutes) ||
                 incrementalMinutes < 1 ||
-                incrementalMinutes > 1440
+                incrementalMinutes > 1440 ||
+                !Number.isSafeInteger(retainFull) ||
+                retainFull < 1 ||
+                retainFull > 100
               ) {
                 await report(
                   Error(
-                    "Full interval: 1–8760 hours; incremental interval: 1–1440 minutes.",
+                    "Full interval: 1–8760 hours; incremental interval: 1–1440 minutes; retained full snapshots: 1–100.",
                   ),
                 );
                 return;
@@ -331,7 +548,11 @@ function BackupSchedule({ onSaved }: { onSaved: () => Promise<void> }) {
               try {
                 await store.mutate((lib) => {
                   lib.settings ??= {};
-                  lib.settings.backup = { fullHours, incrementalMinutes };
+                  lib.settings.backup = {
+                    fullHours,
+                    incrementalMinutes,
+                    retainFull,
+                  };
                 });
                 await onSaved();
                 void autoBackup();
@@ -356,6 +577,12 @@ function BackupSchedule({ onSaved }: { onSaved: () => Promise<void> }) {
         title="Full Snapshot Interval (Hours)"
         defaultValue={String(policy.fullHours)}
       />
+      <Form.TextField
+        id="retainFull"
+        title="Full Snapshots to Keep"
+        defaultValue={String(policy.retainFull)}
+      />
+      <Form.Description text="Retention includes the active snapshot. Only snapshots tracked by the backup index are pruned after successful publication; older untracked files are left untouched." />
       <Form.Description text="Automatic backup must be enabled in extension preferences. Activity checks trigger overdue backups; this is not a background timer. Initial backup, missing baseline, oversized increments or 128 increments cause a full snapshot." />
     </Form>
   );
@@ -524,7 +751,7 @@ function ResetLibrary({ onReset }: { onReset: () => Promise<void> }) {
 
 This permanently deletes **all local vocabulary, notes, examples, confusion groups, practice inclusion, scheduling cards, and review history**.
 
-Preferences and remote WebDAV backups are not deleted. An automatic local safety copy is created before reset. No automatic backup is triggered by this action."
+Before reset, a full WebDAV backup and a verified permanent permanent-backup SQLite copy are required. If backup fails or WebDAV is not configured, reset is cancelled. Archives do not expire automatically; manage them under Backup Status & Remote Files. A local safety copy is also created."
       actions={
         <ActionPanel>
           <Action
@@ -546,7 +773,9 @@ Preferences and remote WebDAV backups are not deleted. An automatic local safety
                 return;
               setBusy(true);
               try {
-                await store.resetLibrary();
+                const archive = await archiveBeforeReset(store, webdavConfig());
+                await store.resetLibrary(archive);
+                await store.setMeta("backup-baseline", null);
                 await onReset();
                 await showToast({
                   style: Toast.Style.Success,

@@ -72,9 +72,9 @@ test("copy and recall spelling put plain answer comparison between title and ful
   w.notes = "A usage note";
   for (const copy of [true, false]) {
     const text = spellingMarkdown(w, "aller", "aler", true, "zh-first", copy);
-    assert.ok(text.indexOf("# aller") < text.indexOf("**Correct spelling**"));
-    assert.ok(text.indexOf("**Correct spelling**") < text.indexOf("**Your input**"));
-    assert.ok(text.indexOf("**Your input**") < text.indexOf("(v.i.)"));
+    assert.ok(text.indexOf("# aller") < text.indexOf("| aller |"));
+    assert.ok(text.indexOf("| aller |") < text.indexOf("| aler |"));
+    assert.ok(text.indexOf("| aler |") < text.indexOf("(v.i.)"));
     assert.ok(text.includes("A usage note"));
     assert.ok(text.includes("去程票"));
   }
@@ -86,7 +86,7 @@ test("copy and recall spelling put plain answer comparison between title and ful
       "A usage note",
     ),
   );
-  assert.ok(spellingDiff("aler", "aller").includes("aller\n\n**Your input**\n\naler"));
+  assert.ok(spellingDiff("aler", "aller").includes("| aller |\n| aler |"));
 });
 
 test("status uses one icon with a practice ring, not a second status or fake known state", () => {

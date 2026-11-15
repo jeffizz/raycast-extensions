@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { emptyLibrary, validateLibrary } from "../src/core/model";
 import { applyImport } from "../src/core/importer";
 import { questions, recordAnswer } from "../src/core/learning";
-import { modeSettings } from "../src/core/practice-settings";
+import { addModeWords, modeSettings } from "../src/core/practice-settings";
 import { applyDelta, baseline, makeDelta } from "../src/core/delta";
 import { backupDue } from "../src/core/backup";
 
@@ -125,4 +125,24 @@ test("activity scheduling chooses initial full, interval increment, overdue full
   lib.settings = { backup: { fullHours: 1, incrementalMinutes: 1 } };
   assert.equal(backupDue(lib, state, at + 3600000), "full");
   validateLibrary(lib);
+});
+
+test("multi-mode destinations append, deduplicate and preserve audio and other modes", () => {
+  const lib = sample();
+  const [a, b] = lib.words.map((w) => w.id);
+  lib.settings = {
+    practice: { spelling: { autoSpeak: true, scope: "default", wordIds: [a] } },
+  };
+  addModeWords(lib, [b, b], ["spelling", "gender"]);
+  assert.deepEqual(modeSettings(lib, "spelling"), {
+    autoSpeak: true,
+    scope: "selected",
+    wordIds: [a, b],
+  });
+  assert.deepEqual(modeSettings(lib, "gender").wordIds, [b]);
+  assert.equal(modeSettings(lib, "meaning").scope, "default");
+  assert.equal(questions(lib, "gender", true).length, 1);
+  const before = structuredClone(lib.settings.practice);
+  addModeWords(lib, [a], ["default"]);
+  assert.deepEqual(lib.settings.practice, before);
 });

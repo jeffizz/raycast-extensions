@@ -70,10 +70,13 @@ test("similarity cutoff and compact comparison", () => {
   assert.equal(groupName(l.words), "demain · xyz · main");
   assert.ok(
     spellingDiff("etudiante", "étudiante").includes(
-      "étudiante\n\n**Your input**\n\netudiante",
+      "| étudiante |\n| etudiante |",
     ),
   );
-  assert.ok(spellingDiff("main", "matin").indexOf("matin") < spellingDiff("main", "matin").indexOf("\n\nmain"));
+  assert.ok(
+    spellingDiff("main", "matin").indexOf("matin") <
+      spellingDiff("main", "matin").indexOf("| main |"),
+  );
 });
 test("SQLite file export retains views and library, excludes local status", async () => {
   const root = await mkdtemp(join(tmpdir(), "fv-refine-"));

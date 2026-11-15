@@ -86,12 +86,12 @@ export function comparison(words: Word[], language: LanguageMode = "zh-first") {
   return `| ${Array(count).fill("").join(" | ")} |\n| ${Array(count).fill("---").join(" | ")} |\n${rows.join("\n")}`;
 }
 export function spellingDiff(answer: string, expected: string) {
-  return `**Correct spelling**\n\n${md(expected) || "—"}\n\n**Your input**\n\n${md(answer) || "—"}`;
+  return `| |\n| --- |\n| ${cell(expected) || "—"} |\n| ${cell(answer) || "—"} |`;
 }
 export const sortModes = [
   ["activity", "Recently Used"],
   ["import", "Import Order"],
-  ["import-desc", "Reverse Import Order"],
+  ["import-desc", "Import Order (Reverse)"],
   ["alphabetical", "A → Z"],
   ["random", "Random"],
 ] as const;

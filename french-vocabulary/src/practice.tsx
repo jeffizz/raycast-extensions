@@ -1,6 +1,7 @@
 import {
   Action,
   ActionPanel,
+  confirmAlert,
   Icon,
   List,
   showToast,
@@ -35,9 +36,19 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
   const { lib, loading, refresh } = useLibrary(),
     { push } = useNavigation();
   const [all, setAll] = useState(false);
-  const [scope, setScope] = useState<"configured" | "default" | "selected">(
-    "configured",
-  );
+  const saveSource = async (mode: Mode, scope: "default" | "selected") => {
+    try {
+      await store.mutate((l) => {
+        l.settings ??= {};
+        l.settings.practice ??= {};
+        l.settings.practice[mode] = { ...modeSettings(l, mode), scope };
+      });
+      await refresh();
+      void autoBackup();
+    } catch (e) {
+      await report(e);
+    }
+  };
   const modes: {
     mode: Mode;
     title: string;
@@ -91,13 +102,7 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
         title={`${lib.words.filter((w) => w.practice && !w.archived && (!wordIds || wordIds.includes(w.id))).length} active words included`}
       >
         {modes.map((m) => {
-          const queue = questions(
-            lib,
-            m.mode,
-            all,
-            wordIds,
-            scope === "configured" ? undefined : scope,
-          );
+          const queue = questions(lib, m.mode, all, wordIds, undefined);
           return (
             <List.Item
               key={m.mode}
@@ -106,7 +111,7 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
               accessories={[{ text: `${queue.length} cards` }]}
               detail={
                 <List.Item.Detail
-                  markdown={`# ${m.title}\n\n${m.description}\n\n${queue.length} cards\n\n**Words:** ${(scope === "configured" ? modeSettings(lib, m.mode).scope : scope) === "selected" ? "Selected words only" : "Default library"}\n\n**Auto pronunciation:** ${modeSettings(lib, m.mode).autoSpeak ? "On" : "Off"}`}
+                  markdown={`# ${m.title}\n\n${m.description}\n\n${queue.length} cards\n\n**Words:** ${modeSettings(lib, m.mode).scope === "selected" ? "Selected words only" : "Default library"}\n\n**Auto pronunciation:** ${modeSettings(lib, m.mode).autoSpeak ? "On" : "Off"}`}
                 />
               }
               actions={
@@ -133,22 +138,45 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
                       );
                     }}
                   />
-                  <ActionPanel.Submenu title="Word Selection">
-                    <Action
-                      title="Use Mode Setting"
-                      onAction={() => setScope("configured")}
-                    />
+                  <Action
+                    title="Clear Selected Words for This Mode"
+                    onAction={async () => {
+                      if (
+                        !(await confirmAlert({
+                          title: "Clear selected words for this mode?",
+                          message:
+                            "Only this mode’s selected list is cleared. Vocabulary, global practice inclusion and review history are preserved.",
+                        }))
+                      )
+                        return;
+                      try {
+                        await store.mutate((l) => {
+                          l.settings ??= {};
+                          l.settings.practice ??= {};
+                          l.settings.practice[m.mode] = {
+                            ...modeSettings(l, m.mode),
+                            wordIds: [],
+                          };
+                        });
+                        await refresh();
+                        void autoBackup();
+                      } catch (e) {
+                        await report(e);
+                      }
+                    }}
+                  />
+                  <ActionPanel.Submenu title="Practice Source">
                     <Action
                       title="Use Default Library"
-                      onAction={() => setScope("default")}
+                      onAction={() => saveSource(m.mode, "default")}
                     />
                     <Action
                       title="Use Selected Words Only"
-                      onAction={() => setScope("selected")}
+                      onAction={() => saveSource(m.mode, "selected")}
                     />
                   </ActionPanel.Submenu>
                   <Action
-                    title="Configure Practice Modes"
+                    title="Practice Settings"
                     onAction={() =>
                       push(<PracticeSettings onSaved={refresh} />)
                     }

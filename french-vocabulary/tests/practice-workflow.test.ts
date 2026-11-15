@@ -3,10 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  emptyLibrary,
-  setPractice,
-} from "../src/core/model";
+import { emptyLibrary, setPractice } from "../src/core/model";
 import { applyImport } from "../src/core/importer";
 import {
   practiceSpeechTexts,
@@ -101,7 +98,7 @@ test("both spelling modes auto-submit only complete exact input, including NFC e
   assert.equal(shouldAutoSubmit(expected.normalize("NFD"), expected), true);
   assert.equal(
     spellingDiff("etudiante", expected),
-    "**Correct spelling**\n\nétudiante\n\n**Your input**\n\netudiante",
+    "| |\n| --- |\n| étudiante |\n| etudiante |",
   );
 });
 

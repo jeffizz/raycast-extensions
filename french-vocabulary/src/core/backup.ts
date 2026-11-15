@@ -12,8 +12,12 @@ export type Increment = {
   from: number;
   to: number;
 };
-export const backupPolicy = (lib: Pick<Library, "settings">) =>
-  lib.settings?.backup ?? { fullHours: 24, incrementalMinutes: 5 };
+export const backupPolicy = (lib: Pick<Library, "settings">) => ({
+  fullHours: 24,
+  incrementalMinutes: 5,
+  retainFull: 5,
+  ...lib.settings?.backup,
+});
 export function backupDue(
   lib: Pick<Library, "settings" | "revision" | "libraryId">,
   state: BackupState | undefined,
@@ -45,6 +49,7 @@ export type Manifest = {
   fullAt?: string;
   snapshotRevision?: number;
   increments?: Increment[];
+  fullHistory?: string[];
 };
 export type BackupState = {
   at?: string;
@@ -144,6 +149,15 @@ export async function remoteManifest(
     !Number.isFinite(Date.parse(m.at))
   )
     throw Error("Invalid remote backup index.");
+  if (
+    m.fullHistory !== undefined &&
+    (!Array.isArray(m.fullHistory) ||
+      m.fullHistory.length > 1000 ||
+      m.fullHistory.some(
+        (f) => typeof f !== "string" || !/^snapshot-[\w-]+\.sqlite$/.test(f),
+      ))
+  )
+    throw Error("Invalid full snapshot history.");
   if (m.increments !== undefined) {
     if (
       m.format !== 2 ||
@@ -174,6 +188,61 @@ export async function remoteManifest(
       throw Error("Broken incremental backup index.");
   }
   return { manifest: m, etag: r.headers.get("etag") ?? undefined };
+}
+export type RemoteFile = { name: string; size?: number; modified?: string };
+export function parseRemoteFiles(xml: string, folder: string): RemoteFile[] {
+  const decode = (s: string) =>
+    s
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'");
+  const value = (s: string, tag: string) => {
+    const match = s.match(
+      new RegExp(
+        "<(?:[\\w-]+:)?" +
+          tag +
+          "\\b[^>]*>([\\s\\S]*?)</(?:[\\w-]+:)?" +
+          tag +
+          ">",
+        "i",
+      ),
+    );
+    return match ? decode(match[1].trim()) : undefined;
+  };
+  const root = new URL(folder);
+  const files: RemoteFile[] = [];
+  for (const response of xml.match(
+    /<(?:[\w-]+:)?response\b[^>]*>[\s\S]*?<\/(?:[\w-]+:)?response>/gi,
+  ) ?? []) {
+    const href = value(response, "href");
+    if (!href) continue;
+    const url = new URL(href, root);
+    if (url.origin !== root.origin || !url.pathname.startsWith(root.pathname))
+      continue;
+    const relative = url.pathname.slice(root.pathname.length);
+    if (!relative || relative.includes("/")) continue;
+    const size = Number(value(response, "getcontentlength"));
+    files.push({
+      name: decodeURIComponent(relative),
+      size: Number.isFinite(size) ? size : undefined,
+      modified: value(response, "getlastmodified"),
+    });
+  }
+  return files.sort((a, b) => a.name.localeCompare(b.name));
+}
+export async function listRemoteFiles(c: BackupConfig): Promise<RemoteFile[]> {
+  const r = await request(c, "", {
+    method: "PROPFIND",
+    headers: { Depth: "1", "Content-Type": "application/xml" },
+    body: '<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:getcontentlength/><d:getlastmodified/><d:resourcetype/></d:prop></d:propfind>',
+  });
+  if (r.status !== 207)
+    throw Error(
+      `Cannot list WebDAV files (HTTP ${r.status}). The server must support PROPFIND.`,
+    );
+  return parseRemoteFiles((await limitedBody(r)).toString("utf8"), target(c));
 }
 export async function downloadBackup(
   c: BackupConfig,
@@ -222,9 +291,15 @@ async function cleanupIncrements(
   const active = new Set(
     (manifest.increments ?? []).map((increment) => increment.file),
   );
+  active.add(manifest.file);
+  for (const file of manifest.fullHistory ?? []) active.add(file);
   const cleanupPending: string[] = [];
   for (const file of new Set(files)) {
-    if (!/^delta-[\w-]+\.json$/.test(file) || active.has(file)) continue;
+    if (
+      !/^(?:delta-[\w-]+\.json|snapshot-[\w-]+\.sqlite)$/.test(file) ||
+      active.has(file)
+    )
+      continue;
     try {
       const response = await request(c, file, { method: "DELETE" });
       if (!response.ok && response.status !== 404) cleanupPending.push(file);
@@ -353,6 +428,15 @@ async function uploadBackup(
           fullAt: now(),
           increments: [],
         };
+    const knownFull = [
+      ...new Set([
+        m.file,
+        ...(remote.manifest?.format === 2 ? [remote.manifest.file] : []),
+        ...(remote.manifest?.fullHistory ?? []),
+      ]),
+    ];
+    m.fullHistory = knownFull.slice(0, backupPolicy(lib).retainFull);
+    const expiredFull = knownFull.slice(backupPolicy(lib).retainFull);
     const put = await request(c, file, {
       method: "PUT",
       headers: {
@@ -388,6 +472,7 @@ async function uploadBackup(
       );
     const obsolete = [
       ...new Set([
+        ...expiredFull,
         ...(previous?.target === t ? (previous.cleanupPending ?? []) : []),
         ...(!incremental
           ? (remote.manifest?.increments ?? []).map((d) => d.file)
@@ -409,7 +494,7 @@ async function uploadBackup(
       "backup-baseline": baseline(lib),
     });
     // Publish and persist the new standalone snapshot before deleting old deltas.
-    // Never delete snapshots: old full copies remain a safety fallback.
+    // Retain only indexed full snapshots within the configured retention limit.
     await cleanupIncrements(store, c, obsolete, m);
     return m;
   } catch (e) {
@@ -420,6 +505,47 @@ async function uploadBackup(
     });
     throw e;
   }
+}
+export const isResetArchive = (file: string) =>
+  /^(?:permanent-backup|archive-before-reset)-[\w-]+-[a-f0-9]{64}\.sqlite$/.test(
+    file,
+  );
+export async function downloadResetArchive(c: BackupConfig, file: string) {
+  if (!isResetArchive(file)) throw Error("Invalid reset archive name.");
+  const r = await request(c, file);
+  if (!r.ok) throw Error(`Cannot download reset archive (HTTP ${r.status}).`);
+  const bytes = await limitedBody(r);
+  if (!file.endsWith("-" + digest(bytes) + ".sqlite"))
+    throw Error("Reset archive checksum mismatch.");
+  await readSQLiteBackup(bytes);
+  return bytes;
+}
+export async function deleteResetArchive(c: BackupConfig, file: string) {
+  if (!isResetArchive(file))
+    throw Error("Only reset archives can be deleted here.");
+  const r = await request(c, file, { method: "DELETE" });
+  if (!r.ok && r.status !== 404)
+    throw Error(`Cannot delete reset archive (HTTP ${r.status}).`);
+}
+export async function archiveBeforeReset(store: Store, c: BackupConfig) {
+  const manifest = await backupRemote(store, c, { kind: "full", force: true });
+  const r = await request(c, manifest.file);
+  if (!r.ok) throw Error("Cannot download verified pre-reset snapshot.");
+  const bytes = await limitedBody(r);
+  if (digest(bytes) !== manifest.sha256)
+    throw Error("Pre-reset snapshot checksum mismatch.");
+  const file = `permanent-backup-${now().replace(/[:.]/g, "-")}-${uid()}-${digest(bytes)}.sqlite`;
+  const put = await request(c, file, {
+    method: "PUT",
+    headers: {
+      "If-None-Match": "*",
+      "Content-Type": "application/vnd.sqlite3",
+    },
+    body: new Uint8Array(bytes),
+  });
+  if (!put.ok) throw Error("Cannot publish permanent pre-reset archive.");
+  await downloadResetArchive(c, file);
+  return { revision: manifest.revision, libraryId: manifest.libraryId, file };
 }
 export async function restoreRemote(
   store: Store,

@@ -7,6 +7,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
+  archiveBeforeReset,
+  downloadResetArchive,
+  deleteResetArchive,
+  parseRemoteFiles,
   backupRemote,
   downloadBackup,
   restoreRemote,
@@ -208,6 +212,27 @@ test("WebDAV end-to-end: verified snapshots, first-device guard, restore, subseq
       createHash("sha256").update(JSON.stringify(queuedFull)).digest("hex"),
     );
     assert.deepEqual((await downloadBackup(cfg)).library, await b.load());
+    // Snapshot retention counts the active full snapshot and retries failed deletions.
+    await b.mutate((lib) => {
+      lib.settings ??= {};
+      lib.settings.backup = {
+        fullHours: 24,
+        incrementalMinutes: 5,
+        retainFull: 3,
+      };
+    });
+    rejectDelete = true;
+    const retained = await backupRemote(b, cfg, { kind: "full", force: true });
+    assert.equal(retained.fullHistory?.length, 3);
+    assert.equal(retained.fullHistory?.[0], retained.file);
+    assert.ok((await b.getMeta<any>("webdav")).cleanupPending.length > 0);
+    const expired = (await b.getMeta<any>("webdav")).cleanupPending as string[];
+    rejectDelete = false;
+    await backupRemote(b, cfg, { kind: "incremental" });
+    for (const file of expired) assert.ok(!files.has(`/backup/${file}`));
+    for (const file of retained.fullHistory!)
+      assert.ok(files.has(`/backup/${file}`));
+    assert.deepEqual((await downloadBackup(cfg)).library, await b.load());
     // Reset is represented by deletions in the next increment, without stale rows.
     await b.resetLibrary();
     await backupRemote(b, cfg, { kind: "incremental" });
@@ -225,6 +250,46 @@ test("WebDAV end-to-end: verified snapshots, first-device guard, restore, subseq
       resetDownload.manifest.increments!.length + 1,
     );
     assert.equal((await downloadBackup(cfg)).library.words[0].word, "bonjour");
+    const archive = await archiveBeforeReset(c, cfg);
+    assert.ok(archive.file.startsWith("permanent-backup-"));
+    const archiveBytes = await downloadResetArchive(cfg, archive.file);
+    const legacyName = archive.file.replace(
+      "permanent-backup-",
+      "archive-before-reset-",
+    );
+    files.set("/backup/" + legacyName, Buffer.from(archiveBytes));
+    assert.deepEqual(await downloadResetArchive(cfg, legacyName), archiveBytes);
+    await deleteResetArchive(cfg, legacyName);
+    assert.ok(!files.has("/backup/" + legacyName));
+    assert.equal(
+      (await import("../src/core/sqlite")).readSQLiteBackup instanceof Function,
+      true,
+    );
+    const archivedLibrary = await (
+      await import("../src/core/sqlite")
+    ).readSQLiteBackup(archiveBytes);
+    assert.equal(archivedLibrary.words[0].word, "bonjour");
+    await c.touchWord(archivedLibrary.words[0].id);
+    await assert.rejects(c.resetLibrary(archive));
+    assert.equal((await c.load()).words.length, 1);
+    const freshArchive = await archiveBeforeReset(c, cfg);
+    await c.resetLibrary(freshArchive);
+    await c.setMeta("backup-baseline", null);
+    await c.mutate((lib) => applyImport(lib, [["salut"]], ["word"]));
+    const restarted = await backupRemote(c, cfg, { kind: "incremental" });
+    assert.equal(restarted.increments?.length, 0);
+    assert.ok(files.has("/backup/" + archive.file));
+    assert.equal(
+      (
+        await (
+          await import("../src/core/sqlite")
+        ).readSQLiteBackup(await downloadResetArchive(cfg, archive.file))
+      ).words[0].word,
+      "bonjour",
+    );
+    await deleteResetArchive(cfg, archive.file);
+    assert.ok(!files.has("/backup/" + archive.file));
+    await assert.rejects(deleteResetArchive(cfg, restarted.file));
     const latest = JSON.parse(files.get("/backup/latest.json")!.toString());
     files.set(`/backup/${latest.file}`, Buffer.from("corrupt"));
     await assert.rejects(downloadBackup(cfg), /checksum mismatch/);
@@ -232,6 +297,17 @@ test("WebDAV end-to-end: verified snapshots, first-device guard, restore, subseq
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await rm(root, { recursive: true, force: true });
   }
+});
+test("remote inventory parses namespaced responses and excludes other paths", () => {
+  const xml =
+    '<d:multistatus xmlns:d="DAV:"><d:response><d:href>/backup/</d:href></d:response><d:response><d:href>/backup/a%20b.sqlite</d:href><d:propstat><d:prop><d:getcontentlength>123</d:getcontentlength><d:getlastmodified>Sat, 14 Nov 2026 12:00:00 GMT</d:getlastmodified></d:prop></d:propstat></d:response><d:response><d:href>/elsewhere/no</d:href></d:response></d:multistatus>';
+  assert.deepEqual(parseRemoteFiles(xml, "https://example.com/backup/"), [
+    {
+      name: "a b.sqlite",
+      size: 123,
+      modified: "Sat, 14 Nov 2026 12:00:00 GMT",
+    },
+  ]);
 });
 test("WebDAV target rejects insecure external HTTP and embedded credentials", () => {
   assert.throws(
