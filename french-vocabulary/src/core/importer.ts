@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   canonical,
   inferSense,
@@ -142,11 +143,43 @@ export function detectColumns(text: string): Parsed {
 function meaningKey(s: Pick<Sense, "pos" | "ipa" | "en" | "zh">) {
   return JSON.stringify([s.pos, s.ipa, s.en, s.zh].map(canonical));
 }
+export type ImportConflict = {
+  key: string;
+  row: number;
+  word: string;
+  incoming: Sense;
+  candidates: Sense[];
+};
+export type ImportDecision = {
+  action: "keep" | "update" | "add" | "merge";
+  fields?: Partial<
+    Record<
+      "pos" | "ipa" | "en" | "zh",
+      "existing" | "incoming" | "existing-first" | "incoming-first"
+    >
+  >;
+  target?: number;
+};
+export function combineImportText(existing: string, incoming: string) {
+  const a = existing.trim(),
+    b = incoming.trim();
+  if (!a) return b;
+  if (!b || canonical(a) === canonical(b)) return a;
+  return a + "\n" + b;
+}
+export type ImportResolver = (conflict: ImportConflict) => ImportDecision;
+// Compare presentation variants only for review suggestions, never automatic merging.
+const reviewKey = (text: string) =>
+  canonical(text)
+    .replace(/[〈《<][^〉》>]*[〉》>]|【[^】]*】/gu, "")
+    .toLocaleLowerCase()
+    .replace(/[\p{P}\p{Z}\s]/gu, "");
 export function applyImport(
   lib: Library,
   rows: string[][],
   mapping: Field[],
   batchId: string = uid(),
+  resolve?: ImportResolver,
 ): ImportStats {
   if (mapping.filter((f) => f === "word").length !== 1)
     throw Error("Map exactly one French Word column.");
@@ -241,6 +274,61 @@ export function applyImport(
       )
         ? compatible[0]
         : undefined;
+    if (!fill && resolve) {
+      const candidates = word.senses.filter(
+        (s) =>
+          reviewKey(s.pos) === reviewKey(sense.pos) &&
+          (["en", "zh"] as const).some(
+            (k) => reviewKey(s[k]) && reviewKey(s[k]) === reviewKey(sense[k]),
+          ),
+      );
+      if (candidates.length) {
+        const key = createHash("sha256")
+          .update(
+            JSON.stringify([
+              i,
+              values.word,
+              meaningKey(sense),
+              candidates.map(meaningKey),
+            ]),
+          )
+          .digest("hex");
+        const decision = resolve({
+          key,
+          row: i + 1,
+          word: word.word,
+          incoming: sense,
+          candidates,
+        });
+        if (decision.action === "keep") {
+          stats.duplicates++;
+          continue;
+        }
+        if (decision.action === "update" || decision.action === "merge") {
+          const target = candidates[decision.target ?? 0];
+          if (!target)
+            throw Error("The selected import target is no longer available.");
+          for (const k of ["pos", "ipa", "en", "zh"] as const)
+            if (decision.action === "merge") {
+              const source = decision.fields?.[k];
+              if (source === "incoming") target[k] = sense[k];
+              else if (
+                (k === "en" || k === "zh") &&
+                source === "existing-first"
+              )
+                target[k] = combineImportText(target[k], sense[k]);
+              else if (
+                (k === "en" || k === "zh") &&
+                source === "incoming-first"
+              )
+                target[k] = combineImportText(sense[k], target[k]);
+            } else if (sense[k]) target[k] = sense[k];
+          stats.filled++;
+          word.updatedAt = now();
+          continue;
+        }
+      }
+    }
     if (fill) {
       for (const k of ["ipa", "en", "zh"] as const)
         if (!fill[k]) fill[k] = sense[k];

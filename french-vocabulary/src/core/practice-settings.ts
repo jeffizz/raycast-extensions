@@ -39,3 +39,12 @@ export function modeIncludes(
     (scope ?? settings.scope) === "default" || settings.wordIds.includes(wordId)
   );
 }
+
+export function toggleAutoSpeak(lib: Library, mode: Mode): boolean {
+  lib.settings ??= {};
+  lib.settings.practice ??= {};
+  const settings = modeSettings(lib, mode);
+  const autoSpeak = !settings.autoSpeak;
+  lib.settings.practice[mode] = { ...settings, autoSpeak };
+  return autoSpeak;
+}

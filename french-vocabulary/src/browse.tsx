@@ -20,6 +20,9 @@ import { autoBackup, preferences, report, store, useLibrary } from "./runtime";
 import { speakWord, stopSpeech } from "./speech";
 import { AddToGroup, WordActions, wordMarkdown } from "./components/word";
 import ImportVocabulary from "./import-vocabulary";
+import { PracticeSession } from "./practice";
+import { copyQuestionsInOrder } from "./core/learning";
+import { modeSettings } from "./core/practice-settings";
 import { statusIcon } from "./components/status";
 import { addModeWords, practiceModes } from "./core/practice-settings";
 import {
@@ -461,6 +464,31 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
                       }
                     }}
                   />
+                  {!archived && (
+                    <Action
+                      title="Copy Spelling"
+                      icon={Icon.Pencil}
+                      onAction={() => {
+                        const queue = copyQuestionsInOrder(lib, words);
+                        if (!queue.length) {
+                          void report(
+                            Error(
+                              "No eligible words. Words must be included in practice and have a usable spelling.",
+                            ),
+                          );
+                          return;
+                        }
+                        stopSpeech();
+                        push(
+                          <PracticeSession
+                            queue={queue}
+                            autoSpeak={modeSettings(lib, "copy").autoSpeak}
+                            onFinished={safeRefresh}
+                          />,
+                        );
+                      }}
+                    />
+                  )}
                   {processingActions}
                   {marked.length > 0 && (
                     <Action

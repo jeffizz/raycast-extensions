@@ -4,9 +4,14 @@ import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { emptyLibrary, Mode } from "../src/core/model";
-import { applyImport } from "../src/core/importer";
+import {
+  applyImport,
+  ImportDecision,
+  combineImportText,
+} from "../src/core/importer";
 import {
   comparison,
+  importConflictMarkdown,
   detailMarkdown,
   recentMistakes,
   spellingDiff,
@@ -14,10 +19,260 @@ import {
   translations,
   LanguageMode,
 } from "../src/core/presentation";
-import { questions, recordAnswer } from "../src/core/learning";
+import {
+  questions,
+  recordAnswer,
+  copyQuestionsInOrder,
+} from "../src/core/learning";
+test("Browse copy spelling preserves the supplied order and filters ineligible words", () => {
+  const lib = emptyLibrary();
+  applyImport(lib, [["zèbre"], ["ami"], ["monde"]], ["word"]);
+  lib.words[1].practice = false;
+  lib.settings = {
+    practice: { copy: { scope: "selected", wordIds: [], autoSpeak: false } },
+  };
+  const original = JSON.stringify(lib);
+  const queue = copyQuestionsInOrder(lib, [
+    lib.words[2],
+    lib.words[1],
+    lib.words[0],
+  ]);
+  assert.deepEqual(
+    queue.map((q) => q.word.word),
+    ["monde", "zèbre"],
+  );
+  assert.ok(queue.every((q) => q.mode === "copy"));
+  assert.equal(JSON.stringify(lib), original);
+  lib.words[2].archived = true;
+  assert.deepEqual(copyQuestionsInOrder(lib, [lib.words[2]]), []);
+});
+import { modeSettings, toggleAutoSpeak } from "../src/core/practice-settings";
+test("pronunciation toggles persist independently and preserve mode selections", async () => {
+  const root = await mkdtemp(join(tmpdir(), "fv-audio-toggle-"));
+  try {
+    const store = new Store(root);
+    await store.mutate((lib) => {
+      lib.settings ??= {};
+      lib.settings.practice = {
+        copy: { autoSpeak: false, scope: "selected", wordIds: ["chosen"] },
+      };
+      assert.equal(toggleAutoSpeak(lib, "copy"), true);
+      assert.equal(toggleAutoSpeak(lib, "gender"), true);
+      assert.equal(toggleAutoSpeak(lib, "gender"), false);
+    });
+    const restored = await new Store(root).load();
+    assert.equal(modeSettings(restored, "copy").autoSpeak, true);
+    assert.deepEqual(modeSettings(restored, "copy").wordIds, ["chosen"]);
+    assert.equal(modeSettings(restored, "copy").scope, "selected");
+    assert.equal(modeSettings(restored, "gender").autoSpeak, false);
+    assert.equal(modeSettings(restored, "meaning").autoSpeak, false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 import { statusIcon } from "../src/components/status";
 import { Store } from "../src/core/sqlite";
 import { fetchSpeech } from "../src/core/frdic";
+
+test("ambiguous import decisions preserve IDs, metadata and explicit sense separation", () => {
+  const mapping = ["word", "pos", "en", "zh"] as const;
+  const lib = emptyLibrary();
+  applyImport(
+    lib,
+    [["sympa", "adj.inv.", "nice / friendly", "〈俗〉给人好感的，讨人喜欢的"]],
+    [...mapping],
+  );
+  const original = structuredClone(lib);
+  const row = [
+    ["sympa", "adj.inv.", "nice / friendly", "给人好感的,讨人喜欢的"],
+  ];
+  let key = "";
+  applyImport(lib, row, [...mapping], "review", (c) => {
+    assert.equal(c.candidates.length, 1);
+    key = c.key;
+    return { action: "keep" };
+  });
+  assert.deepEqual(lib, original);
+  applyImport(lib, row, [...mapping], "review", (c) => {
+    assert.equal(c.key, key);
+    return { action: "update", target: 0 };
+  });
+  assert.equal(lib.words[0].senses.length, 1);
+  assert.equal(lib.words[0].senses[0].id, original.words[0].senses[0].id);
+  assert.equal(
+    lib.words[0].senses[0].genderSource,
+    original.words[0].senses[0].genderSource,
+  );
+  const separate = structuredClone(original);
+  applyImport(separate, row, [...mapping], "review", () => ({ action: "add" }));
+  assert.equal(separate.words[0].senses.length, 2);
+  let called = false;
+  applyImport(lib, row, [...mapping], "review", () => {
+    called = true;
+    return { action: "keep" };
+  });
+  assert.equal(called, false);
+  const different = structuredClone(original);
+  applyImport(
+    different,
+    [["sympa", "adj.inv.", "another meaning", "different"]],
+    [...mapping],
+    "review",
+    () => {
+      throw Error("Not ambiguous");
+    },
+  );
+  assert.equal(different.words[0].senses.length, 2);
+  const staged = emptyLibrary();
+  let conflicts = 0;
+  applyImport(
+    staged,
+    [
+      ["sympa", "adj.inv.", "nice / friendly", "〈俗〉给人好感的，讨人喜欢的"],
+      ...row,
+    ],
+    [...mapping],
+    "review",
+    () => {
+      conflicts++;
+      return { action: "keep" };
+    },
+  );
+  assert.equal(conflicts, 1);
+  assert.equal(staged.words[0].senses.length, 1);
+});
+
+test("import conflict tables align existing and incoming fields and escape multiline data", () => {
+  const lib = emptyLibrary();
+  applyImport(
+    lib,
+    [["lecture", "n.f.", "", "reading", "original"]],
+    ["word", "pos", "ipa", "en", "zh"],
+  );
+  const existing = lib.words[0].senses[0];
+  const incoming = { ...existing, ipa: "/new/", zh: "line1\nline2", en: "a|b" };
+  const markdown = importConflictMarkdown("lecture", incoming, [
+    existing,
+    existing,
+  ]);
+  assert.ok(markdown.includes("| Existing | Incoming |"));
+  assert.ok(markdown.includes("| — | /new/ |"));
+  assert.ok(markdown.includes("| original | line1<br>line2 |"));
+  assert.ok(markdown.includes("a\\|b"));
+  assert.ok(markdown.includes("## Existing Sense 2"));
+});
+
+test("field merges preserve sense identity and review references, and decisions survive restart", async () => {
+  const mapping = ["word", "pos", "ipa", "en", "zh"] as const;
+  const lib = emptyLibrary();
+  applyImport(
+    lib,
+    [["lecture", "n.f.", "/old/", "reading", "old translation"]],
+    [...mapping],
+  );
+  const before = structuredClone(lib.words[0].senses[0]);
+  const rows = [["lecture", "n.f.", "/new/", "reading", "new translation"]];
+  const decisions: Record<string, ImportDecision> = {};
+  applyImport(structuredClone(lib), rows, [...mapping], "preview", (c) => {
+    decisions[c.key] = {
+      action: "merge",
+      target: 0,
+      fields: { ipa: "existing", zh: "incoming", en: "existing" },
+    };
+    return { action: "keep" };
+  });
+  const root = await mkdtemp(join(tmpdir(), "fv-import-draft-"));
+  try {
+    const draft = { libraryId: lib.libraryId, rows, mapping, decisions };
+    await new Store(root).setMeta("import-review-draft", draft);
+    const restored = await new Store(root).getMeta<typeof draft>(
+      "import-review-draft",
+    );
+    assert.deepEqual(restored, draft);
+    applyImport(lib, rows, [...mapping], "commit", (c) => {
+      assert.equal(c.key.length, 64);
+      assert.ok(restored!.decisions[c.key]);
+      return restored!.decisions[c.key];
+    });
+    const merged = lib.words[0].senses[0];
+    assert.equal(merged.id, before.id);
+    assert.equal(merged.ipa, before.ipa);
+    assert.equal(merged.zh, "new translation");
+    assert.equal(merged.genderSource, before.genderSource);
+    assert.equal(lib.words[0].senses.length, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("2500-row conflict review has compact reproducible keys across repeated decisions", () => {
+  const mapping = ["word", "pos", "ipa", "en", "zh"] as const;
+  const rows = Array.from({ length: 2500 }, (_, i) => [
+    "word" + i,
+    "n.f.",
+    "/old/",
+    "meaning" + i,
+    "old",
+  ]);
+  const lib = emptyLibrary();
+  applyImport(lib, rows, [...mapping]);
+  const incoming = rows.map((r) => [...r.slice(0, 4), "new"]);
+  const decisions: Record<string, ImportDecision> = {};
+  for (let pass = 0; pass < 4; pass++) {
+    let count = 0;
+    applyImport(
+      structuredClone(lib),
+      incoming,
+      [...mapping],
+      "preview",
+      (c) => {
+        count++;
+        assert.equal(c.key.length, 64);
+        if (pass === 0) decisions[c.key] = { action: "keep" };
+        else assert.ok(decisions[c.key]);
+        return decisions[c.key];
+      },
+    );
+    assert.equal(count, 2500);
+  }
+  assert.equal(lib.words[0].senses[0].zh, "old");
+});
+
+test("translation merge concatenates in the selected order without empty or identical duplicates", () => {
+  assert.equal(combineImportText("same", "same"), "same");
+  assert.equal(combineImportText("é", "e\u0301"), "é");
+  assert.equal(combineImportText("", "new"), "new");
+  assert.equal(combineImportText("old", ""), "old");
+  const mapping = ["word", "pos", "ipa", "en", "zh"] as const;
+  for (const order of ["existing-first", "incoming-first"] as const) {
+    const lib = emptyLibrary();
+    applyImport(
+      lib,
+      [["lecture", "n.f.", "/old/", "reading", "old"]],
+      [...mapping],
+    );
+    const id = lib.words[0].senses[0].id;
+    applyImport(
+      lib,
+      [["lecture", "n.f.", "/new/", "reading", "new"]],
+      [...mapping],
+      "merge",
+      () => ({
+        action: "merge",
+        target: 0,
+        fields: { zh: order, en: order, ipa: "existing" },
+      }),
+    );
+    assert.equal(
+      lib.words[0].senses[0].zh,
+      order === "existing-first" ? "old\nnew" : "new\nold",
+    );
+    assert.equal(lib.words[0].senses[0].en, "reading");
+    assert.equal(lib.words[0].senses[0].ipa, "/old/");
+    assert.equal(lib.words[0].senses[0].id, id);
+    assert.equal(lib.words[0].senses.length, 1);
+  }
+});
 
 function sample() {
   const lib = emptyLibrary();

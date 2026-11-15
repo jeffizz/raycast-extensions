@@ -29,7 +29,11 @@ export function questions(
 ): Question[] {
   const result: Question[] = [];
   for (const w of lib.words.filter(
-    (w) => !w.archived && w.practice && (!wordIds || wordIds.includes(w.id)) && modeIncludes(lib, mode, w.id, scope),
+    (w) =>
+      !w.archived &&
+      w.practice &&
+      (!wordIds || wordIds.includes(w.id)) &&
+      modeIncludes(lib, mode, w.id, scope),
   )) {
     const expected = speechWord(w);
     for (const s of mode === "gender" ? w.senses : w.senses.slice(0, 1)) {
@@ -57,6 +61,21 @@ export function questions(
   return result.sort(
     (a, b) => a.due - b.due || a.word.word.localeCompare(b.word.word, "fr"),
   );
+}
+export function copyQuestionsInOrder(lib: Library, words: Word[]): Question[] {
+  const eligible = new Map(
+    questions(
+      lib,
+      "copy",
+      true,
+      words.map((w) => w.id),
+      "default",
+    ).map((q) => [q.word.id, q]),
+  );
+  return words.flatMap((w) => {
+    const q = eligible.get(w.id);
+    return q ? [q] : [];
+  });
 }
 export function recordAnswer(
   lib: Library,

@@ -27,8 +27,7 @@ import {
   spellingMarkdown,
   spellingDiff,
 } from "./core/presentation";
-import { modeSettings } from "./core/practice-settings";
-import { PracticeSettings } from "./components/practice-settings";
+import { modeSettings, toggleAutoSpeak } from "./core/practice-settings";
 export default function Practice() {
   return <PracticeMenu />;
 }
@@ -176,10 +175,20 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
                     />
                   </ActionPanel.Submenu>
                   <Action
-                    title="Practice Settings"
-                    onAction={() =>
-                      push(<PracticeSettings onSaved={refresh} />)
+                    title={
+                      modeSettings(lib, m.mode).autoSpeak
+                        ? "Disable Auto Pronunciation"
+                        : "Enable Auto Pronunciation"
                     }
+                    onAction={async () => {
+                      try {
+                        await store.mutate((l) => toggleAutoSpeak(l, m.mode));
+                        await refresh();
+                        void autoBackup();
+                      } catch (e) {
+                        await report(e);
+                      }
+                    }}
                   />
                   <Action title="Refresh" onAction={refresh} />
                 </ActionPanel>
@@ -191,9 +200,9 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
     </List>
   );
 }
-function PracticeSession({
+export function PracticeSession({
   queue,
-  autoSpeak,
+  autoSpeak: initialAutoSpeak,
   onFinished,
 }: {
   queue: Question[];
@@ -208,6 +217,23 @@ function PracticeSession({
       [],
     ),
     [selected, setSelected] = useState(queue[0]?.id);
+  const [autoSpeak, setAutoSpeak] = useState(initialAutoSpeak);
+  const togglingAudio = useRef(false);
+  const togglePronunciation = async () => {
+    if (togglingAudio.current || ending.current) return;
+    togglingAudio.current = true;
+    try {
+      const enabled = await store.mutate((l) =>
+        toggleAutoSpeak(l, queue[0].mode),
+      );
+      setAutoSpeak(enabled);
+      void autoBackup();
+    } catch (e) {
+      await report(e);
+    } finally {
+      togglingAudio.current = false;
+    }
+  };
   const saved = useRef(new Set<string>());
   const pending = useRef<Promise<unknown>>(Promise.resolve());
   const ending = useRef(false);
@@ -219,7 +245,7 @@ function PracticeSession({
   useEffect(() => {
     stopSpeech();
     if (q && autoSpeak)
-      void speakTexts(practiceSpeechTexts(q, false)).catch(report);
+      void speakTexts(practiceSpeechTexts(q, revealed)).catch(report);
     return () => stopSpeech();
   }, [q, autoSpeak]);
   const finish = async () => {
@@ -427,6 +453,12 @@ function PracticeSession({
           url={`eudic-fr://dict/${encodeURIComponent(speechWord(q.word))}`}
         />
       )}
+      <Action
+        title={
+          autoSpeak ? "Disable Auto Pronunciation" : "Enable Auto Pronunciation"
+        }
+        onAction={togglePronunciation}
+      />
       <Action
         title="End Session"
         shortcut={{ modifiers: ["cmd", "shift"], key: "e" }}

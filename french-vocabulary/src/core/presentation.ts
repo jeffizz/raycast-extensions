@@ -85,6 +85,23 @@ export function comparison(words: Word[], language: LanguageMode = "zh-first") {
   });
   return `| ${Array(count).fill("").join(" | ")} |\n| ${Array(count).fill("---").join(" | ")} |\n${rows.join("\n")}`;
 }
+export function importConflictMarkdown(
+  word: string,
+  incoming: Sense,
+  candidates: Sense[],
+) {
+  const fields = ["pos", "ipa", "zh", "en"] as const;
+  const tables = candidates.map(
+    (existing, index) =>
+      `## Existing Sense ${index + 1}\n\n| Existing | Incoming |\n| --- | --- |\n${fields
+        .map(
+          (key) =>
+            `| ${cell(existing[key]) || "—"} | ${cell(incoming[key]) || "—"} |`,
+        )
+        .join("\n")}`,
+  );
+  return `# ${md(word)}\n\n${tables.join("\n\n")}\n\nChoose Keep Existing, Update Existing Sense, or Add as New Sense. Updates preserve the sense ID and review records; empty imported fields do not erase existing values.`;
+}
 export function spellingDiff(answer: string, expected: string) {
   return `| |\n| --- |\n| ${cell(expected) || "—"} |\n| ${cell(answer) || "—"} |`;
 }

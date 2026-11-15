@@ -45,7 +45,6 @@ import {
   webdavConfig,
 } from "./runtime";
 import { escapeMD, WordActions, wordMarkdown } from "./components/word";
-import { PracticeSettings } from "./components/practice-settings";
 import { modeSettings, practiceModes } from "./core/practice-settings";
 export default function Dashboard() {
   const { lib, loading, refresh } = useLibrary(),
@@ -229,25 +228,6 @@ export default function Dashboard() {
         actions={
           <ActionPanel>
             <Action title="Refresh" onAction={reload} />
-          </ActionPanel>
-        }
-      />
-      <List.Item
-        title="Practice Settings"
-        icon={Icon.Gear}
-        detail={
-          <List.Item.Detail
-            markdown={
-              "# Practice Settings\n\nConfigure automatic pronunciation independently for every practice mode."
-            }
-          />
-        }
-        actions={
-          <ActionPanel>
-            <Action
-              title="Practice Settings"
-              onAction={() => push(<PracticeSettings onSaved={reload} />)}
-            />
           </ActionPanel>
         }
       />
