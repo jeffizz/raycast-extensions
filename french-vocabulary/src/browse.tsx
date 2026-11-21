@@ -15,10 +15,12 @@ import {
   sortWords,
   matchesSearch,
   recentMistakes,
+  detailMarkdown,
+  sessionTranslationLanguage,
 } from "./core/presentation";
 import { autoBackup, preferences, report, store, useLibrary } from "./runtime";
 import { speakWord, stopSpeech } from "./speech";
-import { AddToGroup, WordActions, wordMarkdown } from "./components/word";
+import { AddToGroup, WordActions } from "./components/word";
 import ImportVocabulary from "./import-vocabulary";
 import { PracticeSession } from "./practice";
 import { copyQuestionsInOrder } from "./core/learning";
@@ -48,6 +50,10 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
     [shuffle, setShuffle] = useState(0),
     [visibleCount, setVisibleCount] = useState(80),
     [recentErrors, setRecentErrors] = useState(false);
+  const [showEnglish, setShowEnglish] = useState(
+    () => preferences().languageMode !== "zh-only",
+  );
+  const toggleEnglish = () => setShowEnglish((value) => !value);
   const [session, setSession] = useState<ProcessingSession>();
   const [processing, setProcessing] = useState(false);
   const [sessionLoading, setSessionLoading] = useState(true);
@@ -442,7 +448,14 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
             detail={
               w.id === activeId ? (
                 <List.Item.Detail
-                  markdown={wordMarkdown(w, undefined, showIPA)}
+                  markdown={detailMarkdown(
+                    w,
+                    showIPA,
+                    sessionTranslationLanguage(
+                      preferences().languageMode,
+                      showEnglish,
+                    ),
+                  )}
                 />
               ) : undefined
             }
@@ -560,6 +573,16 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
                     title={showIPA ? "Hide IPA" : "Show IPA"}
                     onAction={() => setShowIPA((x) => !x)}
                   />
+                  {preferences().languageMode !== "en-only" && (
+                    <Action
+                      title={
+                        showEnglish
+                          ? "Hide English Meanings"
+                          : "Show English Meanings"
+                      }
+                      onAction={toggleEnglish}
+                    />
+                  )}
                   {sort === "random" && (
                     <Action
                       title="Shuffle Again"

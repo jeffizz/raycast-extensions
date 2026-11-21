@@ -4,6 +4,7 @@ import {
   confirmAlert,
   Icon,
   List,
+  LocalStorage,
   showToast,
   Toast,
   useNavigation,
@@ -23,8 +24,10 @@ import { speechWord, Mode, Word, Library } from "./core/model";
 import { autoBackup, preferences, report, store, useLibrary } from "./runtime";
 import { speakTexts, stopSpeech } from "./speech";
 import { escapeMD } from "./components/word";
+import { statusIcon } from "./components/status";
 import {
   translations,
+  sessionTranslationLanguage,
   spellingMarkdown,
   spellingDiff,
 } from "./core/presentation";
@@ -223,9 +226,24 @@ export function PracticeSession(props: SessionProps) {
   const [progress, setProgress] = useState<CopyProgress>();
   const [choice, setChoice] = useState<"resume" | "new">();
   const [libraryId, setLibraryId] = useState("");
+  const [autoAdvance, setAutoAdvance] = useState(false);
+  const [speakAfterSubmit, setSpeakAfterSubmit] = useState(false);
+  const [advanceAfterCorrect, setAdvanceAfterCorrect] = useState(true);
   useEffect(() => {
     let active = true;
     void (async () => {
+      const setting = await LocalStorage.getItem<boolean>(
+        `auto-advance-${props.queue[0]?.mode}`,
+      );
+      if (active) setAutoAdvance(setting ?? false);
+      const timing = await LocalStorage.getItem<boolean>(
+        `speak-after-submit-${props.queue[0]?.mode}`,
+      );
+      if (active) setSpeakAfterSubmit(timing ?? false);
+      const advance = await LocalStorage.getItem<boolean>(
+        `advance-after-correct-${props.queue[0]?.mode}`,
+      );
+      if (active) setAdvanceAfterCorrect(advance ?? true);
       if (props.queue[0]?.mode === "copy") {
         const lib = props.library ?? (await store.load(false));
         if (active) setLibraryId(lib.libraryId);
@@ -347,6 +365,9 @@ export function PracticeSession(props: SessionProps) {
       queue={choice === "resume" ? progress!.queue : props.queue}
       initialProgress={choice === "resume" ? progress : undefined}
       sessionLibraryId={libraryId}
+      initialAutoAdvance={autoAdvance}
+      initialSpeakAfterSubmit={speakAfterSubmit}
+      initialAdvanceAfterCorrect={advanceAfterCorrect}
     />
   ) : (
     <List isLoading />
@@ -358,11 +379,17 @@ function ActivePracticeSession({
   manageWords = false,
   initialProgress,
   sessionLibraryId,
+  initialAutoAdvance,
+  initialSpeakAfterSubmit,
+  initialAdvanceAfterCorrect,
   onFinished,
 }: {
   queue: Question[];
   initialProgress?: CopyProgress;
   sessionLibraryId: string;
+  initialAutoAdvance: boolean;
+  initialSpeakAfterSubmit: boolean;
+  initialAdvanceAfterCorrect: boolean;
   manageWords?: boolean;
   autoSpeak: boolean;
   onFinished: () => Promise<void>;
@@ -377,6 +404,63 @@ function ActivePracticeSession({
     [selected, setSelected] = useState(queue[initialProgress?.index ?? 0]?.id);
   const [wordUpdates, setWordUpdates] = useState<Record<string, Word>>({});
   const [autoSpeak, setAutoSpeak] = useState(initialAutoSpeak);
+  const [autoAdvance, setAutoAdvance] = useState(initialAutoAdvance);
+  const [speakAfterSubmit, setSpeakAfterSubmit] = useState(
+    initialSpeakAfterSubmit,
+  );
+  const [advanceAfterCorrect, setAdvanceAfterCorrect] = useState(
+    initialAdvanceAfterCorrect,
+  );
+  const correctAdvanceLock = useRef(false);
+  const toggleCorrectAdvance = async () => {
+    if (correctAdvanceLock.current || working.current || ending.current) return;
+    correctAdvanceLock.current = true;
+    try {
+      const next = !advanceAfterCorrect;
+      await LocalStorage.setItem(
+        `advance-after-correct-${queue[0].mode}`,
+        next,
+      );
+      setAdvanceAfterCorrect(next);
+    } catch (error) {
+      await report(error);
+    } finally {
+      correctAdvanceLock.current = false;
+    }
+  };
+  const timingLock = useRef(false);
+  const spokenSubmissions = useRef(new Set<string>());
+  const toggleSpeechTiming = async () => {
+    if (timingLock.current || working.current || ending.current) return;
+    timingLock.current = true;
+    try {
+      const next = !speakAfterSubmit;
+      await LocalStorage.setItem(`speak-after-submit-${queue[0].mode}`, next);
+      setSpeakAfterSubmit(next);
+    } catch (error) {
+      await report(error);
+    } finally {
+      timingLock.current = false;
+    }
+  };
+  const [showEnglish, setShowEnglish] = useState(
+    () => preferences().languageMode !== "zh-only",
+  );
+  const toggleEnglish = () => setShowEnglish((value) => !value);
+  const togglingAdvance = useRef(false);
+  const toggleAutoAdvance = async () => {
+    if (togglingAdvance.current) return;
+    togglingAdvance.current = true;
+    try {
+      const enabled = !autoAdvance;
+      await LocalStorage.setItem(`auto-advance-${queue[0].mode}`, enabled);
+      setAutoAdvance(enabled);
+    } catch (error) {
+      await report(error);
+    } finally {
+      togglingAdvance.current = false;
+    }
+  };
   const togglingAudio = useRef(false);
   const togglePronunciation = async () => {
     if (togglingAudio.current || ending.current) return;
@@ -472,10 +556,14 @@ function ActivePracticeSession({
   };
   useEffect(() => {
     stopSpeech();
-    if (q && autoSpeak)
+    if (
+      q &&
+      autoSpeak &&
+      !(speakAfterSubmit && (q.mode === "copy" || q.mode === "spelling"))
+    )
       void speakTexts(practiceSpeechTexts(q, revealed)).catch(report);
     return () => stopSpeech();
-  }, [current, autoSpeak]);
+  }, [current, autoSpeak, speakAfterSubmit]);
   const finish = async () => {
     if (ending.current) return;
     ending.current = true;
@@ -521,6 +609,19 @@ function ActivePracticeSession({
         advance ? "" : value,
         !advance,
       );
+      if (
+        autoSpeak &&
+        speakAfterSubmit &&
+        (q.mode === "copy" || q.mode === "spelling") &&
+        !spokenSubmissions.current.has(q.id)
+      ) {
+        spokenSubmissions.current.add(q.id);
+        try {
+          await speakTexts(practiceSpeechTexts(q, true));
+        } catch (error) {
+          await report(error);
+        }
+      }
       if (!advance) return;
       setIndex((i) => i + 1);
       setSelected(queue[index + 1]?.id);
@@ -563,15 +664,26 @@ function ActivePracticeSession({
       </List>
     );
   const isInput = q.mode === "copy" || q.mode === "spelling";
-  const language = preferences().languageMode;
-  const meanings = q.word.senses
+  const baseLanguage = preferences().languageMode;
+  const language = sessionTranslationLanguage(baseLanguage, showEnglish);
+  const displayWord = q.word;
+  const displaySense = q.sense;
+  const meanings = displayWord.senses
     .map((s) => translations(s, language))
     .filter(Boolean)
     .join("\n\n");
   const prompt = isInput
-    ? spellingMarkdown(q.word, q.expected, answer, revealed, language, copy)
+    ? spellingMarkdown(
+        displayWord,
+        q.expected,
+        answer,
+        revealed,
+        language,
+        copy,
+        !checkAnswer(answer, q.expected).correct,
+      )
     : q.mode === "gender"
-      ? `# ${escapeMD(q.word.word)}\n\n${translations(q.sense, language)}\n\n⌘1 **un**　⌘2 **une**`
+      ? `# ${escapeMD(q.word.word)}\n\n${translations(displaySense, language)}\n\n⌘1 **un**　⌘2 **une**`
       : `# ${escapeMD(q.word.word)}`;
   const feedback = !revealed
     ? ""
@@ -593,7 +705,13 @@ function ActivePracticeSession({
             }
             if (working.current) return;
             if (checkAnswer(answer, q.expected).correct) {
-              void submit(3);
+              const pause =
+                !autoAdvance &&
+                autoSpeak &&
+                speakAfterSubmit &&
+                !advanceAfterCorrect;
+              if (pause) setRevealed(true);
+              void submit(3, answer, !pause);
             } else {
               setRevealed(true);
               void submit(1, answer, false);
@@ -682,18 +800,51 @@ function ActivePracticeSession({
           speakTexts(practiceSpeechTexts(q, revealed)).catch(report)
         }
       />
-      {revealed && (
-        <Action.OpenInBrowser
-          title="Look Up in Frdic"
-          url={`eudic-fr://dict/${encodeURIComponent(speechWord(q.word))}`}
-        />
-      )}
+      <Action.OpenInBrowser
+        title="Look Up in Frdic"
+        shortcut={{ modifiers: ["cmd"], key: "d" }}
+        url={`eudic-fr://dict/${encodeURIComponent(speechWord(q.word))}`}
+      />
       <Action
         title={
           autoSpeak ? "Disable Auto Pronunciation" : "Enable Auto Pronunciation"
         }
         onAction={togglePronunciation}
       />
+      {baseLanguage !== "en-only" && (
+        <Action
+          title={
+            showEnglish ? "Hide English Meanings" : "Show English Meanings"
+          }
+          onAction={toggleEnglish}
+        />
+      )}
+      {isInput && autoSpeak && (
+        <Action
+          title={
+            speakAfterSubmit
+              ? "Auto Pronunciation: Switch to Word Entry"
+              : "Auto Pronunciation: Switch to After Submit"
+          }
+          onAction={toggleSpeechTiming}
+        />
+      )}
+      {isInput && (
+        <Action
+          title={autoAdvance ? "Disable Auto Advance" : "Enable Auto Advance"}
+          onAction={toggleAutoAdvance}
+        />
+      )}
+      {isInput && !autoAdvance && autoSpeak && speakAfterSubmit && (
+        <Action
+          title={
+            advanceAfterCorrect
+              ? "Disable Advance after Correct Submit"
+              : "Enable Advance after Correct Submit"
+          }
+          onAction={toggleCorrectAdvance}
+        />
+      )}
       {manageWords && copy && (
         <ActionPanel.Section title="Manage Current Word">
           <Action
@@ -759,7 +910,12 @@ function ActivePracticeSession({
       onSearchTextChange={(v) => {
         if (!revealed && isInput && !working.current && !ending.current) {
           setAnswer(v);
-          if (shouldAutoSubmit(v, q.expected)) void submit(3, v);
+          if (
+            autoAdvance &&
+            !(autoSpeak && speakAfterSubmit) &&
+            shouldAutoSubmit(v, q.expected)
+          )
+            void submit(3, v);
         }
       }}
       searchBarPlaceholder={isInput ? "Type spelling…" : ""}
@@ -772,11 +928,29 @@ function ActivePracticeSession({
     >
       {queue.slice(window.start, window.end).map((item, offset) => {
         const i = window.start + offset;
+        const word = wordUpdates[item.word.id] ?? item.word;
+        const familiarity =
+          word.familiarity === "known"
+            ? "Know"
+            : word.familiarity === "fuzzy" || word.familiarity === "unknown"
+              ? "Fuzzy"
+              : "Unmarked";
+        const familiarityIcon = statusIcon({ ...word, practice: false });
         return (
           <List.Item
             key={item.id}
             id={item.id}
             title={q.mode !== "spelling" ? item.word.word : `${i + 1}`}
+            accessories={
+              manageWords && copy && familiarityIcon
+                ? [
+                    {
+                      icon: { source: familiarityIcon },
+                      tooltip: `Familiarity: ${familiarity}`,
+                    },
+                  ]
+                : undefined
+            }
             icon={
               i < index
                 ? Icon.CheckCircle

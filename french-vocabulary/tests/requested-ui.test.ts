@@ -13,6 +13,7 @@ import {
   comparison,
   importConflictMarkdown,
   detailMarkdown,
+  sessionTranslationLanguage,
   recentMistakes,
   spellingDiff,
   spellingMarkdown,
@@ -310,6 +311,27 @@ test("literal translation brackets cannot become Raycast LaTeX delimiters", () =
   assert.ok(!rendered.includes("\\\\["));
   assert.ok(!rendered.includes("$$"));
   assert.equal(lib.words[0].senses[0].zh.startsWith("[relationship]"), true);
+});
+test("session English toggle permits Chinese Only overrides but leaves English Only unchanged", () => {
+  const word = sample().words[0];
+  const before = JSON.stringify(word);
+  for (const base of [
+    "zh-first",
+    "en-first",
+    "zh-only",
+    "en-only",
+  ] as LanguageMode[]) {
+    assert.equal(sessionTranslationLanguage(base, base !== "zh-only"), base);
+    for (const shown of [false, true]) {
+      const mode = sessionTranslationLanguage(base, shown);
+      const text = detailMarkdown(word, false, mode);
+      assert.equal(text.includes("to go"), base === "en-only" || shown);
+      assert.equal(text.includes("去，走"), base !== "en-only");
+      if (base === "en-first" && shown) assert.equal(mode, "en-first");
+    }
+  }
+  assert.equal(sessionTranslationLanguage(undefined, true), "zh-first");
+  assert.equal(JSON.stringify(word), before);
 });
 test("all four translation modes apply to details and comparison columns", () => {
   const w = sample().words[0];

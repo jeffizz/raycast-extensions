@@ -1,5 +1,16 @@
 import { Library, Word, Sense, searchKey, mnemonicPhrases } from "./model";
 export type LanguageMode = "zh-first" | "en-first" | "zh-only" | "en-only";
+export function sessionTranslationLanguage(
+  base: LanguageMode = "zh-first",
+  showEnglish: boolean,
+): LanguageMode {
+  if (base === "en-only") return base;
+  return showEnglish
+    ? base === "en-first"
+      ? "en-first"
+      : "zh-first"
+    : "zh-only";
+}
 // Keep literal delimiters out of Raycast's LaTeX preprocessor.
 export const md = (s: string) =>
   s.replace(/[\\\x60*_{}\[\]<>#|$]/g, (char) =>
@@ -64,6 +75,7 @@ export function spellingMarkdown(
   revealed: boolean,
   language: LanguageMode = "zh-first",
   copy = false,
+  showComparison = true,
 ) {
   // Recall spelling must not reveal the target or article phrases before checking.
   const title =
@@ -72,7 +84,7 @@ export function spellingMarkdown(
     copy || revealed
       ? wordDetails(w, false, language)
       : w.senses.map((s) => senseMarkdown(s, language)).join("\n\n---\n\n");
-  return `# ${md(title)}\n\n${revealed ? `${spellingDiff(answer, expected)}\n\n` : ""}${details}`;
+  return `# ${md(title)}\n\n${revealed && showComparison ? `${spellingDiff(answer, expected)}\n\n` : ""}${details}`;
 }
 export function groupName(words: Word[]) {
   return words.map((w) => w.word).join(" · ");
