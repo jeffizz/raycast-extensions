@@ -483,6 +483,7 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
                           <PracticeSession
                             queue={queue}
                             manageWords
+                            library={lib}
                             autoSpeak={modeSettings(lib, "copy").autoSpeak}
                             onFinished={safeRefresh}
                           />,

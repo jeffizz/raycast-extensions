@@ -1,6 +1,12 @@
 import { Library, Word, Sense, searchKey, mnemonicPhrases } from "./model";
 export type LanguageMode = "zh-first" | "en-first" | "zh-only" | "en-only";
-export const md = (s: string) => s.replace(/[\\`*_{}\[\]<>#|]/g, "\\$&");
+// Keep literal delimiters out of Raycast's LaTeX preprocessor.
+export const md = (s: string) =>
+  s.replace(/[\\\x60*_{}\[\]<>#|$]/g, (char) =>
+    char === "\\" || char === "[" || char === "]" || char === "$"
+      ? `&#${char.codePointAt(0)};`
+      : "\\" + char,
+  );
 const cell = (s: string) => md(s).replace(/\r?\n/g, "<br>");
 export function translationValues(s: Sense, mode: LanguageMode = "zh-first") {
   const zh = s.zh.trim(),

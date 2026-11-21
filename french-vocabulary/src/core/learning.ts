@@ -59,7 +59,13 @@ export function questions(
     }
   }
   return result.sort(
-    (a, b) => a.due - b.due || a.word.word.localeCompare(b.word.word, "fr"),
+    (a, b) =>
+      (mode === "copy"
+        ? Number(a.word.familiarity === "known") -
+          Number(b.word.familiarity === "known")
+        : 0) ||
+      a.due - b.due ||
+      a.word.word.localeCompare(b.word.word, "fr"),
   );
 }
 export function copyQuestionsInOrder(lib: Library, words: Word[]): Question[] {
@@ -72,7 +78,11 @@ export function copyQuestionsInOrder(lib: Library, words: Word[]): Question[] {
       "default",
     ).map((q) => [q.word.id, q]),
   );
-  return words.flatMap((w) => {
+  const ordered = [
+    ...words.filter((w) => w.familiarity !== "known"),
+    ...words.filter((w) => w.familiarity === "known"),
+  ];
+  return ordered.flatMap((w) => {
     const q = eligible.get(w.id);
     return q ? [q] : [];
   });

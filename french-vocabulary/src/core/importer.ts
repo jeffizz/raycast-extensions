@@ -165,7 +165,7 @@ export function combineImportText(existing: string, incoming: string) {
     b = incoming.trim();
   if (!a) return b;
   if (!b || canonical(a) === canonical(b)) return a;
-  return a + "\n" + b;
+  return a + "; " + b;
 }
 export type ImportResolver = (conflict: ImportConflict) => ImportDecision;
 // Compare presentation variants only for review suggestions, never automatic merging.

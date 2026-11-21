@@ -10,6 +10,7 @@ import {
 } from "@raycast/api";
 import { useEffect, useRef, useState } from "react";
 import { Grade } from "ts-fsrs";
+import { compactCopyQueue, practiceWindow } from "./core/copy-session";
 import {
   checkAnswer,
   Question,
@@ -18,7 +19,7 @@ import {
   shouldAutoSubmit,
   practiceSpeechTexts,
 } from "./core/learning";
-import { speechWord, Mode, Word } from "./core/model";
+import { speechWord, Mode, Word, Library } from "./core/model";
 import { autoBackup, preferences, report, store, useLibrary } from "./runtime";
 import { speakTexts, stopSpeech } from "./speech";
 import { escapeMD } from "./components/word";
@@ -131,6 +132,7 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
                       push(
                         <PracticeSession
                           queue={queue}
+                          library={lib}
                           autoSpeak={modeSettings(lib, m.mode).autoSpeak}
                           onFinished={refresh}
                         />,
@@ -200,25 +202,179 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
     </List>
   );
 }
-export function PracticeSession({
-  queue,
-  autoSpeak: initialAutoSpeak,
-  manageWords = false,
-  onFinished,
-}: {
+type CopyProgress = {
+  libraryId: string;
+  queue: Question[];
+  index: number;
+  saved: string[];
+  results: { correct: boolean; rating: number }[];
+  answer: string;
+  revealed: boolean;
+};
+type SessionProps = {
+  library?: Library;
   queue: Question[];
   manageWords?: boolean;
   autoSpeak: boolean;
   onFinished: () => Promise<void>;
+};
+export function PracticeSession(props: SessionProps) {
+  const [ready, setReady] = useState(false);
+  const [progress, setProgress] = useState<CopyProgress>();
+  const [choice, setChoice] = useState<"resume" | "new">();
+  const [libraryId, setLibraryId] = useState("");
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      if (props.queue[0]?.mode === "copy") {
+        const lib = props.library ?? (await store.load(false));
+        if (active) setLibraryId(lib.libraryId);
+        const stored = await store.getMeta<
+          CopyProgress & { queue: (Question & { wordId?: string })[] }
+        >("copy-spelling-session");
+        if (
+          stored?.libraryId === lib.libraryId &&
+          stored.index < stored.queue.length
+        ) {
+          const words = new Map(lib.words.map((w) => [w.id, w]));
+          const hydrate = (q: Question & { wordId?: string }) => {
+            const word = words.get(q.wordId ?? q.word?.id);
+            return word
+              ? {
+                  ...q,
+                  word,
+                  sense: word.senses[0],
+                  mode: "copy" as const,
+                  due: 0,
+                }
+              : undefined;
+          };
+          const completed = stored.queue.slice(0, stored.index).flatMap((q) => {
+            const item = hydrate(q);
+            return item ? [item] : [];
+          });
+          const remaining = stored.queue.slice(stored.index).flatMap((q) => {
+            const item = hydrate(q);
+            return item &&
+              !item.word.archived &&
+              item.word.practice &&
+              speechWord(item.word) === item.expected
+              ? [item]
+              : [];
+          });
+          const ordered = [
+            ...remaining.filter((q) => q.word.familiarity !== "known"),
+            ...remaining.filter((q) => q.word.familiarity === "known"),
+          ];
+          const sameQuestion =
+            ordered[0]?.id === stored.queue[stored.index]?.id;
+          if (active && ordered.length)
+            setProgress({
+              ...stored,
+              index: completed.length,
+              queue: [...completed, ...ordered],
+              answer: sameQuestion ? stored.answer : "",
+              revealed: sameQuestion && stored.revealed,
+            });
+        }
+      }
+      if (active) setReady(true);
+    })().catch(async (error) => {
+      await report(error);
+      if (active) setReady(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+  if (!ready) return <List isLoading navigationTitle="Copy Spelling" />;
+  if (props.queue[0]?.mode === "copy" && progress && !choice)
+    return (
+      <List isLoading={!ready} isShowingDetail navigationTitle="Copy Spelling">
+        {progress && (
+          <List.Item
+            title="Resume Session"
+            subtitle={`${progress.index} / ${progress.queue.length} completed`}
+            detail={
+              <List.Item.Detail markdown="Continue the saved queue and progress." />
+            }
+            actions={
+              <ActionPanel>
+                <Action
+                  title="Resume Session"
+                  onAction={() => setChoice("resume")}
+                />
+              </ActionPanel>
+            }
+          />
+        )}
+        <List.Item
+          title="Start New Session"
+          detail={
+            <List.Item.Detail
+              markdown={
+                ready
+                  ? "Start with the current word order and filters. This replaces saved progress."
+                  : "Loading saved progress…"
+              }
+            />
+          }
+          actions={
+            <ActionPanel>
+              <Action
+                title="Start New Session"
+                onAction={async () => {
+                  if (!ready) return;
+                  if (
+                    progress &&
+                    !(await confirmAlert({
+                      title: "Replace saved Copy Spelling progress?",
+                      primaryAction: { title: "Start New Session" },
+                    }))
+                  )
+                    return;
+                  setChoice("new");
+                }}
+              />
+            </ActionPanel>
+          }
+        />
+      </List>
+    );
+  return ready ? (
+    <ActivePracticeSession
+      {...props}
+      queue={choice === "resume" ? progress!.queue : props.queue}
+      initialProgress={choice === "resume" ? progress : undefined}
+      sessionLibraryId={libraryId}
+    />
+  ) : (
+    <List isLoading />
+  );
+}
+function ActivePracticeSession({
+  queue,
+  autoSpeak: initialAutoSpeak,
+  manageWords = false,
+  initialProgress,
+  sessionLibraryId,
+  onFinished,
+}: {
+  queue: Question[];
+  initialProgress?: CopyProgress;
+  sessionLibraryId: string;
+  manageWords?: boolean;
+  autoSpeak: boolean;
+  onFinished: () => Promise<void>;
 }) {
-  const [index, setIndex] = useState(0),
-    [answer, setAnswer] = useState(""),
-    [revealed, setRevealed] = useState(false),
+  const [index, setIndex] = useState(initialProgress?.index ?? 0),
+    [answer, setAnswer] = useState(initialProgress?.answer ?? ""),
+    [revealed, setRevealed] = useState(initialProgress?.revealed ?? false),
     [busy, setBusy] = useState(false),
     [results, setResults] = useState<{ correct: boolean; rating: number }[]>(
-      [],
+      initialProgress?.results ?? [],
     ),
-    [selected, setSelected] = useState(queue[0]?.id);
+    [selected, setSelected] = useState(queue[initialProgress?.index ?? 0]?.id);
   const [wordUpdates, setWordUpdates] = useState<Record<string, Word>>({});
   const [autoSpeak, setAutoSpeak] = useState(initialAutoSpeak);
   const togglingAudio = useRef(false);
@@ -237,11 +393,43 @@ export function PracticeSession({
       togglingAudio.current = false;
     }
   };
-  const saved = useRef(new Set<string>());
+  const saved = useRef(new Set<string>(initialProgress?.saved));
+  const resultLog = useRef(initialProgress?.results ?? []);
+  const progressWrites = useRef<Promise<unknown>>(Promise.resolve());
+  const persistProgress = (nextIndex: number, text = "", shown = false) => {
+    if (queue[0]?.mode !== "copy") return Promise.resolve();
+    const snapshot = {
+      queue: compactCopyQueue(queue),
+      index: nextIndex,
+      saved: [...saved.current],
+      results: [...resultLog.current],
+      answer: text,
+      revealed: shown,
+    };
+    progressWrites.current = progressWrites.current
+      .catch(() => {})
+      .then(async () => {
+        await store.setMeta(
+          "copy-spelling-session",
+          nextIndex >= queue.length
+            ? null
+            : { ...snapshot, libraryId: sessionLibraryId },
+        );
+      });
+    return progressWrites.current;
+  };
+  useEffect(() => {
+    void persistProgress(
+      initialProgress?.index ?? 0,
+      initialProgress?.answer,
+      initialProgress?.revealed,
+    ).catch(report);
+  }, []);
   const pending = useRef<Promise<unknown>>(Promise.resolve());
   const ending = useRef(false);
   const working = useRef(false),
     { pop } = useNavigation();
+  const window = practiceWindow(index, queue.length);
   const current = queue[index];
   const q =
     current && wordUpdates[current.word.id]
@@ -266,6 +454,7 @@ export function PracticeSession({
       if (updated)
         setWordUpdates((previous) => ({ ...previous, [q.word.id]: updated! }));
       if (skip) {
+        await persistProgress(index + 1);
         stopSpeech();
         setIndex(index + 1);
         setSelected(queue[index + 1]?.id);
@@ -293,6 +482,7 @@ export function PracticeSession({
     stopSpeech();
     try {
       await pending.current;
+      await progressWrites.current;
       await autoBackup();
       await onFinished();
       pop();
@@ -323,8 +513,14 @@ export function PracticeSession({
         await pending.current;
         void autoBackup();
         saved.current.add(q.id);
-        setResults((r) => [...r, { correct, rating: grade }]);
+        resultLog.current = [...resultLog.current, { correct, rating: grade }];
+        setResults(resultLog.current);
       }
+      await persistProgress(
+        advance ? index + 1 : index,
+        advance ? "" : value,
+        !advance,
+      );
       if (!advance) return;
       setIndex((i) => i + 1);
       setSelected(queue[index + 1]?.id);
@@ -574,40 +770,45 @@ export function PracticeSession({
       navigationTitle={`${q.mode} · ${index + 1} / ${queue.length}`}
       actions={actions}
     >
-      {queue.map((item, i) => (
-        <List.Item
-          key={item.id}
-          id={item.id}
-          title={q.mode !== "spelling" ? item.word.word : `${i + 1}`}
-          icon={
-            i < index
-              ? Icon.CheckCircle
-              : i === index
-                ? Icon.ArrowRight
-                : Icon.Circle
-          }
-          detail={
-            <List.Item.Detail markdown={i === index ? prompt + feedback : ""} />
-          }
-          actions={
-            i === index ? (
-              actions
-            ) : (
-              <ActionPanel>
-                <Action
-                  title="Return to Current Question"
-                  onAction={() => setSelected(q.id)}
-                />
-                <Action
-                  title="End Session"
-                  shortcut={{ modifiers: ["cmd", "shift"], key: "e" }}
-                  onAction={finish}
-                />
-              </ActionPanel>
-            )
-          }
-        />
-      ))}
+      {queue.slice(window.start, window.end).map((item, offset) => {
+        const i = window.start + offset;
+        return (
+          <List.Item
+            key={item.id}
+            id={item.id}
+            title={q.mode !== "spelling" ? item.word.word : `${i + 1}`}
+            icon={
+              i < index
+                ? Icon.CheckCircle
+                : i === index
+                  ? Icon.ArrowRight
+                  : Icon.Circle
+            }
+            detail={
+              <List.Item.Detail
+                markdown={i === index ? prompt + feedback : ""}
+              />
+            }
+            actions={
+              i === index ? (
+                actions
+              ) : (
+                <ActionPanel>
+                  <Action
+                    title="Return to Current Question"
+                    onAction={() => setSelected(q.id)}
+                  />
+                  <Action
+                    title="End Session"
+                    shortcut={{ modifiers: ["cmd", "shift"], key: "e" }}
+                    onAction={finish}
+                  />
+                </ActionPanel>
+              )
+            }
+          />
+        );
+      })}
     </List>
   );
 }

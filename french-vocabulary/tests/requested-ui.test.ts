@@ -24,6 +24,20 @@ import {
   recordAnswer,
   copyQuestionsInOrder,
 } from "../src/core/learning";
+test("Copy Spelling stably places Know words last in either supplied order", () => {
+  const lib = emptyLibrary();
+  applyImport(lib, [["a"], ["b"], ["c"], ["d"]], ["word"]);
+  lib.words[0].familiarity = "known";
+  lib.words[2].familiarity = "known";
+  assert.deepEqual(
+    copyQuestionsInOrder(lib, lib.words).map((q) => q.word.word),
+    ["b", "d", "a", "c"],
+  );
+  assert.deepEqual(
+    copyQuestionsInOrder(lib, [...lib.words].reverse()).map((q) => q.word.word),
+    ["d", "b", "c", "a"],
+  );
+});
 test("Browse copy spelling preserves the supplied order and filters ineligible words", () => {
   const lib = emptyLibrary();
   applyImport(lib, [["zèbre"], ["ami"], ["monde"]], ["word"]);
@@ -239,6 +253,7 @@ test("2500-row conflict review has compact reproducible keys across repeated dec
 });
 
 test("translation merge concatenates in the selected order without empty or identical duplicates", () => {
+  assert.equal(combineImportText("old", "new"), "old; new");
   assert.equal(combineImportText("same", "same"), "same");
   assert.equal(combineImportText("é", "e\u0301"), "é");
   assert.equal(combineImportText("", "new"), "new");
@@ -265,7 +280,7 @@ test("translation merge concatenates in the selected order without empty or iden
     );
     assert.equal(
       lib.words[0].senses[0].zh,
-      order === "existing-first" ? "old\nnew" : "new\nold",
+      order === "existing-first" ? "old; new" : "new; old",
     );
     assert.equal(lib.words[0].senses[0].en, "reading");
     assert.equal(lib.words[0].senses[0].ipa, "/old/");
@@ -287,6 +302,15 @@ function sample() {
   return lib;
 }
 
+test("literal translation brackets cannot become Raycast LaTeX delimiters", () => {
+  const lib = sample();
+  lib.words[0].senses[0].zh = String.raw`[relationship] \\[manner\\] $$value$$ \\(text\\)`;
+  const rendered = detailMarkdown(lib.words[0]);
+  assert.ok(rendered.includes("&#91;relationship&#93;"));
+  assert.ok(!rendered.includes("\\\\["));
+  assert.ok(!rendered.includes("$$"));
+  assert.equal(lib.words[0].senses[0].zh.startsWith("[relationship]"), true);
+});
 test("all four translation modes apply to details and comparison columns", () => {
   const w = sample().words[0];
   for (const [mode, expected] of [

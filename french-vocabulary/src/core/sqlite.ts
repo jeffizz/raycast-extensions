@@ -17,11 +17,18 @@ export function sqlite(
   path: string,
   query: string,
   readonly = false,
+  outputMode: "json" | "list" = "json",
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const p = spawn(
       "/usr/bin/sqlite3",
-      [...(readonly ? ["-readonly"] : []), "-batch", "-bail", "-json", path],
+      [
+        ...(readonly ? ["-readonly"] : []),
+        "-batch",
+        "-bail",
+        `-${outputMode}`,
+        path,
+      ],
       { stdio: ["pipe", "pipe", "pipe"] },
     );
     const output: Buffer[] = [],
@@ -283,14 +290,14 @@ export class Store {
   }
   async getMeta<T>(key: string): Promise<T | undefined> {
     await this.init();
-    const rows = JSON.parse(
-      (await sqlite(
-        this.path,
-        `SELECT value FROM meta WHERE key=${sql(key)};`,
-        true,
-      )) || "[]",
+    // Metadata is already JSON. Avoid re-encoding a large JSON string in CLI JSON mode.
+    const raw = await sqlite(
+      this.path,
+      `SELECT value FROM meta WHERE key=${sql(key)};`,
+      true,
+      "list",
     );
-    return rows.length ? JSON.parse(rows[0].value) : undefined;
+    return raw ? JSON.parse(raw) : undefined;
   }
   async setMeta(key: string, value: unknown) {
     await this.init();
