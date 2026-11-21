@@ -46,6 +46,7 @@ import {
 } from "./runtime";
 import { escapeMD, WordActions, wordMarkdown } from "./components/word";
 import { modeSettings, practiceModes } from "./core/practice-settings";
+import ManageElevenLabsKeys from "./manage-elevenlabs-keys";
 export default function Dashboard() {
   const { lib, loading, refresh } = useLibrary(),
     { push } = useNavigation();
@@ -189,6 +190,38 @@ export default function Dashboard() {
         }
       />
       <Action
+        title="Use Local Library as New Backup"
+        icon={Icon.Upload}
+        onAction={async () => {
+          if (
+            busy ||
+            !(await confirmAlert({
+              title: "Use the local library as the new remote backup?",
+              message:
+                "The current local library stays unchanged. The existing remote backup will be verified and preserved as a permanent SQLite archive before publishing a new full backup. This can consume additional remote storage. If verification fails, recovery stops.",
+              primaryAction: {
+                title: "Back Up Local Library",
+                style: Alert.ActionStyle.Destructive,
+              },
+            }))
+          )
+            return;
+          await run(async () => {
+            await backupRemote(store, webdavConfig(), {
+              kind: "full",
+              force: true,
+              useLocal: true,
+            });
+            await showToast({
+              style: Toast.Style.Success,
+              title: "Backup connection re-established",
+              message:
+                "Local library backed up; previous remote state preserved.",
+            });
+          });
+        }}
+      />
+      <Action
         title="Export Backup File"
         icon={Icon.Document}
         onAction={() => push(<ExportForm />)}
@@ -221,75 +254,104 @@ export default function Dashboard() {
       isShowingDetail
       navigationTitle="Vocabulary Dashboard"
     >
-      <List.Item
-        title="Learning Overview"
-        icon={Icon.BarChart}
-        detail={<List.Item.Detail markdown={stats} />}
-        actions={
-          <ActionPanel>
-            <Action title="Refresh" onAction={reload} />
-          </ActionPanel>
-        }
-      />
-      <List.Item
-        title="Library Overview"
-        icon={Icon.HardDrive}
-        detail={<List.Item.Detail markdown={libraryOverview} />}
-        actions={
-          <ActionPanel>
-            <Action title="Refresh" onAction={reload} />
-            <Action.ShowInFinder
-              title="Reveal Database Folder"
-              path={environment.supportPath}
-            />
-            {restoreAction}
-            <Action
-              title="Reset Entire Library"
-              icon={Icon.Trash}
-              style={Action.Style.Destructive}
-              onAction={() => push(<ResetLibrary onReset={reload} />)}
-            />
+      <List.Section title="Library & Learning">
+        <List.Item
+          title="Learning Overview"
+          icon={Icon.BarChart}
+          detail={<List.Item.Detail markdown={stats} />}
+          actions={
+            <ActionPanel>
+              <Action title="Refresh" onAction={reload} />
+            </ActionPanel>
+          }
+        />
+        <List.Item
+          title="Library Overview"
+          icon={Icon.HardDrive}
+          detail={<List.Item.Detail markdown={libraryOverview} />}
+          actions={
+            <ActionPanel>
+              <Action title="Refresh" onAction={reload} />
+              <Action.ShowInFinder
+                title="Reveal Database Folder"
+                path={environment.supportPath}
+              />
+              {restoreAction}
+              <Action
+                title="Reset Entire Library"
+                icon={Icon.Trash}
+                style={Action.Style.Destructive}
+                onAction={() => push(<ResetLibrary onReset={reload} />)}
+              />
 
-            <Action
-              title="Clear Audio Cache"
-              onAction={() =>
-                run(async () => {
-                  const ok = await confirmAlert({
-                    title: "Clear cached pronunciation audio?",
-                    message:
-                      "Word data and backups are not affected. Audio will download again as needed.",
-                  });
-                  if (ok)
-                    await rm(join(environment.supportPath, "speech-cache"), {
-                      recursive: true,
-                      force: true,
+              <Action
+                title="Clear Audio Cache"
+                onAction={() =>
+                  run(async () => {
+                    const ok = await confirmAlert({
+                      title: "Clear cached pronunciation audio?",
+                      message:
+                        "Word data and backups are not affected. Frdic and ElevenLabs audio will download again as needed; ElevenLabs downloads may consume credits.",
                     });
-                })
+                    if (ok)
+                      await rm(join(environment.supportPath, "speech-cache"), {
+                        recursive: true,
+                        force: true,
+                      });
+                  })
+                }
+              />
+            </ActionPanel>
+          }
+        />
+        <List.Item
+          title="Backup & Restore"
+          icon={Icon.Cloud}
+          subtitle={backupStatus}
+          detail={<List.Item.Detail markdown={health} />}
+          actions={
+            <ActionPanel>
+              <Action
+                title="Browse Remote Files"
+                onAction={() => push(<RemoteBackupStatus />)}
+              />
+              <Action
+                title="Backup Settings"
+                icon={Icon.Gear}
+                onAction={() => push(<BackupSchedule onSaved={reload} />)}
+              />
+              {backupActions}
+            </ActionPanel>
+          }
+        />
+      </List.Section>
+      <List.Section title="Pronunciation">
+        <List.Item
+          title="Manage ElevenLabs Keys"
+          icon={Icon.Key}
+          detail={
+            <List.Item.Detail
+              markdown={
+                "# ElevenLabs Keys\n\nManage API keys, weights, enabled status and local usage. Keys stay in encrypted local storage and are excluded from library backups.\n\nConfigure the Frdic / ElevenLabs ratio, voices and model in extension preferences."
               }
             />
-          </ActionPanel>
-        }
-      />
-      <List.Item
-        title="Backup & Restore"
-        icon={Icon.Cloud}
-        subtitle={backupStatus}
-        detail={<List.Item.Detail markdown={health} />}
-        actions={
-          <ActionPanel>
-            <Action
-              title="Browse Remote Files"
-              onAction={() => push(<RemoteBackupStatus />)}
-            />
-            <Action
-              title="Backup Settings"
-              icon={Icon.Gear}
-              onAction={() => push(<BackupSchedule onSaved={reload} />)}
-            />
-            {backupActions}
-          </ActionPanel>
-        }
-      />
+          }
+          actions={
+            <ActionPanel>
+              <Action
+                title="Manage ElevenLabs Keys"
+                icon={Icon.Key}
+                onAction={() => push(<ManageElevenLabsKeys />)}
+              />
+              <Action
+                title="Open Pronunciation Preferences"
+                icon={Icon.Gear}
+                onAction={openExtensionPreferences}
+              />
+            </ActionPanel>
+          }
+        />
+      </List.Section>
       <List.Section title="Most Recall Mistakes">
         {top.map(({ w, wrong, total }) => (
           <List.Item
@@ -346,6 +408,22 @@ function RemoteBackupStatus() {
   useEffect(() => {
     void refresh();
   }, []);
+  const fileRank = (name: string) =>
+    name === "latest.json"
+      ? 0
+      : manifest?.increments?.some((d) => d.file === name)
+        ? 1
+        : name === manifest?.file
+          ? 2
+          : isResetArchive(name)
+            ? 5
+            : manifest?.fullHistory?.includes(name)
+              ? 4
+              : 3;
+  const sortedFiles = [...files].sort(
+    (a, b) =>
+      fileRank(a.name) - fileRank(b.name) || a.name.localeCompare(b.name),
+  );
   const role = (name: string) =>
     isResetArchive(name)
       ? "Permanent pre-reset archive"
@@ -383,7 +461,7 @@ function RemoteBackupStatus() {
         }
         actions={actions}
       />
-      {files.map((file) => (
+      {sortedFiles.map((file) => (
         <List.Item
           key={file.name}
           title={file.name}

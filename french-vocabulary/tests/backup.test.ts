@@ -250,6 +250,52 @@ test("WebDAV end-to-end: verified snapshots, first-device guard, restore, subseq
       resetDownload.manifest.increments!.length + 1,
     );
     assert.equal((await downloadBackup(cfg)).library.words[0].word, "bonjour");
+    // Explicit recovery preserves remote data without restoring it over local edits.
+    const oldRemote = (await downloadBackup(cfg)).library;
+    await c.mutate((lib) => {
+      lib.words[0].notes = "Local authoritative edit";
+    });
+    const localBeforeRecovery = await c.load();
+    await c.setMeta("webdav", null);
+    await assert.rejects(
+      backupRemote(c, cfg, { kind: "full", force: true }),
+      /Remote backup is new/,
+    );
+    const beforeRecoveryFiles = new Set(files.keys());
+    rejectIndex = true;
+    await assert.rejects(
+      backupRemote(c, cfg, { useLocal: true, force: true }),
+      /Remote backup changed/,
+    );
+    assert.deepEqual((await downloadBackup(cfg)).library, oldRemote);
+    rejectIndex = false;
+    const recovered = await backupRemote(c, cfg, {
+      useLocal: true,
+      force: true,
+    });
+    assert.equal(recovered.increments?.length, 0);
+    assert.deepEqual(await c.load(), localBeforeRecovery);
+    assert.deepEqual((await downloadBackup(cfg)).library, localBeforeRecovery);
+    const preserved = [...files.keys()].find(
+      (name) =>
+        !beforeRecoveryFiles.has(name) && name.includes("/permanent-backup-"),
+    )!;
+    assert.ok(preserved);
+    const preservedLibrary = await (
+      await import("../src/core/sqlite")
+    ).readSQLiteBackup(
+      await downloadResetArchive(cfg, preserved.split("/").pop()!),
+    );
+    // Materializing the standalone archive advances its revision, not its data.
+    assert.deepEqual(
+      { ...preservedLibrary, revision: oldRemote.revision },
+      oldRemote,
+    );
+    await c.mutate((lib) => {
+      lib.words[0].notes = "Normal backup works again";
+    });
+    await backupRemote(c, cfg, { kind: "incremental" });
+    assert.deepEqual((await downloadBackup(cfg)).library, await c.load());
     const archive = await archiveBeforeReset(c, cfg);
     assert.ok(archive.file.startsWith("permanent-backup-"));
     const archiveBytes = await downloadResetArchive(cfg, archive.file);

@@ -313,7 +313,11 @@ async function cleanupIncrements(
     cleanupPending: cleanupPending.length ? cleanupPending : undefined,
   });
 }
-type BackupOptions = { kind?: "full" | "incremental"; force?: boolean };
+type BackupOptions = {
+  kind?: "full" | "incremental";
+  force?: boolean;
+  useLocal?: boolean;
+};
 const backupQueues = new Map<string, Promise<Manifest>>();
 export async function backupRemote(
   store: Store,
@@ -347,7 +351,7 @@ async function uploadBackup(
       const trusted =
         previous?.target === t &&
         previous.hash === manifestHash(remote.manifest);
-      if (!trusted)
+      if (!trusted && !options.useLocal)
         throw Error(
           "Remote backup is new or changed. Inspect and restore it first, or use a different empty WebDAV folder. Nothing was overwritten.",
         );
@@ -370,8 +374,49 @@ async function uploadBackup(
         return remote.manifest;
       }
     }
+    if (options.useLocal) {
+      await store.backupLocal("before-backup-reconnect");
+      if (remote.manifest) {
+        const download = await downloadBackup(c);
+        if (manifestHash(download.manifest) !== manifestHash(remote.manifest))
+          throw Error(
+            "Remote backup changed during verification. Retry recovery.",
+          );
+        const root = await mkdtemp(join(tmpdir(), "fv-recovery-"));
+        try {
+          const temporary = new Store(root);
+          const empty = await temporary.load();
+          await temporary.save(
+            download.library,
+            empty.revision,
+            empty.libraryId,
+            true,
+          );
+          const path = join(root, "preserved.sqlite");
+          await temporary.exportSQLite(path);
+          const bytes = await readFile(path);
+          const name = `permanent-backup-${now().replace(/[:.]/g, "-")}-${uid()}-${digest(bytes)}.sqlite`;
+          const put = await request(c, name, {
+            method: "PUT",
+            headers: {
+              "If-None-Match": "*",
+              "Content-Type": "application/vnd.sqlite3",
+            },
+            body: new Uint8Array(bytes),
+          });
+          if (!put.ok)
+            throw Error(
+              "Cannot preserve previous remote backup. Recovery stopped.",
+            );
+          await downloadResetArchive(c, name);
+        } finally {
+          await rm(root, { recursive: true, force: true });
+        }
+      }
+    }
     const prior = await store.getMeta<Baseline>("backup-baseline");
     let incremental =
+      !options.useLocal &&
       options.kind === "incremental" &&
       remote.manifest?.format === 2 &&
       prior?.libraryId === lib.libraryId &&

@@ -50,6 +50,15 @@
   ],
   "preferences": [
     {
+      "name": "autoBackup",
+      "type": "checkbox",
+      "title": "Automatic WebDAV Backup",
+      "label": "Check backup intervals during browsing and practice",
+      "description": "Uses JSON increments and periodic SQLite snapshots while a command is running. Configure intervals and inspect status in Dashboard. Restore the remote library first on a new computer.",
+      "required": false,
+      "default": false
+    },
+    {
       "name": "languageMode",
       "type": "dropdown",
       "title": "Translation Display",
@@ -119,13 +128,52 @@
       "required": false
     },
     {
-      "name": "autoBackup",
-      "type": "checkbox",
-      "title": "Automatic WebDAV Backup",
-      "label": "Check backup intervals during browsing and practice",
-      "description": "Uses JSON increments and periodic SQLite snapshots while a command is running. Configure intervals and inspect status in Dashboard. Restore the remote library first on a new computer.",
+      "name": "randomFrdicPercentage",
+      "type": "textfield",
+      "title": "Frdic Probability (%)",
       "required": false,
-      "default": false
+      "default": "100",
+      "description": "0–100. ElevenLabs gets the remainder. Draw before cache lookup; no cross-provider fallback. Set 50 for an even mix. Defaults to Frdic only until ElevenLabs is configured."
+    },
+    {
+      "name": "elevenFrenchVoiceId",
+      "type": "textfield",
+      "title": "ElevenLabs French Voice IDs",
+      "required": false,
+      "default": "FvmvwvObRqIHojkEGh5N",
+      "description": "Comma-separated voice IDs; randomly selected, with separate caches per voice."
+    },
+    {
+      "name": "elevenModel",
+      "type": "textfield",
+      "title": "ElevenLabs Model",
+      "required": false,
+      "default": "eleven_v4",
+      "description": "Model ID sent to ElevenLabs; unknown models receive only required fields."
+    },
+    {
+      "name": "elevenStability",
+      "type": "textfield",
+      "title": "ElevenLabs Stability",
+      "required": false,
+      "default": "0.65",
+      "description": "0–1. v3 maps to 0, 0.5 or 1."
+    },
+    {
+      "name": "elevenSimilarity",
+      "type": "textfield",
+      "title": "ElevenLabs Similarity",
+      "required": false,
+      "default": "0.75",
+      "description": "0–1; omitted for v3."
+    },
+    {
+      "name": "elevenSpeed",
+      "type": "textfield",
+      "title": "ElevenLabs Speed",
+      "required": false,
+      "default": "1",
+      "description": "0.7–1.2 for legacy Flash/Turbo/Multilingual models only; omitted for v4/v3."
     }
   ],
   "scripts": {

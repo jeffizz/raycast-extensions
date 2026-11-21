@@ -482,6 +482,7 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
                         push(
                           <PracticeSession
                             queue={queue}
+                            manageWords
                             autoSpeak={modeSettings(lib, "copy").autoSpeak}
                             onFinished={safeRefresh}
                           />,

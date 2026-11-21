@@ -18,7 +18,7 @@ import {
   shouldAutoSubmit,
   practiceSpeechTexts,
 } from "./core/learning";
-import { speechWord, Mode } from "./core/model";
+import { speechWord, Mode, Word } from "./core/model";
 import { autoBackup, preferences, report, store, useLibrary } from "./runtime";
 import { speakTexts, stopSpeech } from "./speech";
 import { escapeMD } from "./components/word";
@@ -203,9 +203,11 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
 export function PracticeSession({
   queue,
   autoSpeak: initialAutoSpeak,
+  manageWords = false,
   onFinished,
 }: {
   queue: Question[];
+  manageWords?: boolean;
   autoSpeak: boolean;
   onFinished: () => Promise<void>;
 }) {
@@ -217,6 +219,7 @@ export function PracticeSession({
       [],
     ),
     [selected, setSelected] = useState(queue[0]?.id);
+  const [wordUpdates, setWordUpdates] = useState<Record<string, Word>>({});
   const [autoSpeak, setAutoSpeak] = useState(initialAutoSpeak);
   const togglingAudio = useRef(false);
   const togglePronunciation = async () => {
@@ -239,15 +242,51 @@ export function PracticeSession({
   const ending = useRef(false);
   const working = useRef(false),
     { pop } = useNavigation();
-  const q = queue[index],
-    done = index >= queue.length,
+  const current = queue[index];
+  const q =
+    current && wordUpdates[current.word.id]
+      ? { ...current, word: wordUpdates[current.word.id] }
+      : current;
+  const done = index >= queue.length,
     copy = q?.mode === "copy";
+  const updateCurrentWord = async (
+    change: (word: Word) => void,
+    skip = false,
+  ) => {
+    if (!q || working.current || ending.current) return;
+    working.current = true;
+    setBusy(true);
+    try {
+      let updated: Word | undefined;
+      pending.current = store.updateWord(q.word.id, (word) => {
+        change(word);
+        updated = structuredClone(word);
+      });
+      await pending.current;
+      if (updated)
+        setWordUpdates((previous) => ({ ...previous, [q.word.id]: updated! }));
+      if (skip) {
+        stopSpeech();
+        setIndex(index + 1);
+        setSelected(queue[index + 1]?.id);
+        setAnswer("");
+        setRevealed(false);
+      }
+      void autoBackup();
+    } catch (error) {
+      await report(error);
+    } finally {
+      pending.current = Promise.resolve();
+      working.current = false;
+      setBusy(false);
+    }
+  };
   useEffect(() => {
     stopSpeech();
     if (q && autoSpeak)
       void speakTexts(practiceSpeechTexts(q, revealed)).catch(report);
     return () => stopSpeech();
-  }, [q, autoSpeak]);
+  }, [current, autoSpeak]);
   const finish = async () => {
     if (ending.current) return;
     ending.current = true;
@@ -459,6 +498,55 @@ export function PracticeSession({
         }
         onAction={togglePronunciation}
       />
+      {manageWords && copy && (
+        <ActionPanel.Section title="Manage Current Word">
+          <Action
+            title="Mark Fuzzy"
+            shortcut={{ modifiers: ["cmd"], key: "1" }}
+            onAction={() =>
+              updateCurrentWord((w) => {
+                w.familiarity = "fuzzy";
+              })
+            }
+          />
+          <Action
+            title="Mark Know"
+            shortcut={{ modifiers: ["cmd"], key: "2" }}
+            onAction={() =>
+              updateCurrentWord((w) => {
+                w.familiarity = "known";
+              })
+            }
+          />
+          <Action
+            title="Clear Familiarity"
+            shortcut={{ modifiers: ["cmd"], key: "0" }}
+            onAction={() =>
+              updateCurrentWord((w) => {
+                w.familiarity = "unmarked";
+              })
+            }
+          />
+          <Action
+            title="Archive Word"
+            shortcut={{ modifiers: ["cmd", "shift"], key: "a" }}
+            onAction={() =>
+              updateCurrentWord((w) => {
+                w.archived = true;
+              }, true)
+            }
+          />
+          <Action
+            title="Remove from Practice"
+            shortcut={{ modifiers: ["cmd"], key: "t" }}
+            onAction={() =>
+              updateCurrentWord((w) => {
+                w.practice = false;
+              }, true)
+            }
+          />
+        </ActionPanel.Section>
+      )}
       <Action
         title="End Session"
         shortcut={{ modifiers: ["cmd", "shift"], key: "e" }}
