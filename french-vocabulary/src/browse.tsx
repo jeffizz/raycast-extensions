@@ -160,14 +160,27 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
   const [batchBusy, setBatchBusy] = useState(false);
   const [query, setQuery] = useState(""),
     [filter, setFilter] = useState(defaults),
-    [sort, setSort] = useState("activity"),
     [marked, setMarked] = useState<string[]>([]),
     [selection, setSelection] = useState<string>(),
     [selectedRow, setSelectedRow] = useState<string>(),
     [showIPA, setShowIPA] = useState(false),
     [shuffle, setShuffle] = useState(0),
-    [visibleCount, setVisibleCount] = useState(80),
-    [recentErrors, setRecentErrors] = useState(false);
+    [visibleCount, setVisibleCount] = useState(80);
+  const {
+    value: savedOrder = "activity",
+    setValue: setBrowseOrder,
+    isLoading: orderLoading,
+  } = useLocalStorage<string>(
+    archived ? "browse-order-archived" : "browse-order-active",
+    "activity",
+  );
+  const browseOrder =
+    savedOrder === "recent-errors" ||
+    sortModes.some(([value]) => value === savedOrder)
+      ? savedOrder
+      : "activity";
+  const recentErrors = browseOrder === "recent-errors";
+  const sort = recentErrors ? "activity" : browseOrder;
   const baseLanguage = preferences().languageMode;
   const {
     value: savedEnglish,
@@ -529,7 +542,9 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
   };
   return (
     <List
-      isLoading={loading || sessionLoading || layoutLoading || batchBusy}
+      isLoading={
+        loading || sessionLoading || layoutLoading || batchBusy || orderLoading
+      }
       isShowingDetail={!listLayout}
       pagination={{
         pageSize: 80,
@@ -556,10 +571,14 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
       searchBarAccessory={
         <List.Dropdown
           tooltip="Browse Order / Recent Mistakes"
-          value={recentErrors ? "recent-errors" : sort}
-          onChange={(value) => {
-            setRecentErrors(value === "recent-errors");
-            if (value !== "recent-errors") setSort(value);
+          value={browseOrder}
+          onChange={async (value) => {
+            if (orderLoading || value === browseOrder) return;
+            try {
+              await setBrowseOrder(value);
+            } catch (error) {
+              await report(error);
+            }
           }}
         >
           <List.Dropdown.Item
