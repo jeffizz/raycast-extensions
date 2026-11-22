@@ -16,13 +16,16 @@ import {
   checkAnswer,
   Question,
   questions,
+  recallOrders,
+  RecallOrder,
+  orderRecallQuestions,
   recordAnswer,
   shouldAutoSubmit,
   practiceSpeechTexts,
 } from "./core/learning";
 import { speechWord, Mode, Word, Library } from "./core/model";
 import { autoBackup, preferences, report, store, useLibrary } from "./runtime";
-import { speakTexts, stopSpeech } from "./speech";
+import { prepareSpeech, speakTexts, stopSpeech } from "./speech";
 import { escapeMD } from "./components/word";
 import { statusIcon } from "./components/status";
 import {
@@ -39,7 +42,11 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
   const { lib, loading, refresh } = useLibrary(),
     { push } = useNavigation();
   const [all, setAll] = useState(false);
-  const saveSource = async (mode: Mode, scope: "default" | "selected") => {
+  const [orders, setOrders] = useState<Partial<Record<Mode, RecallOrder>>>({});
+  const saveSource = async (
+    mode: Mode,
+    scope: "default" | "selected" | "fuzzy" | "known",
+  ) => {
     try {
       await store.mutate((l) => {
         l.settings ??= {};
@@ -114,7 +121,7 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
               accessories={[{ text: `${queue.length} cards` }]}
               detail={
                 <List.Item.Detail
-                  markdown={`# ${m.title}\n\n${m.description}\n\n${queue.length} cards\n\n**Words:** ${modeSettings(lib, m.mode).scope === "selected" ? "Selected words only" : "Default library"}\n\n**Auto pronunciation:** ${modeSettings(lib, m.mode).autoSpeak ? "On" : "Off"}`}
+                  markdown={`# ${m.title}\n\n${m.description}\n\n${queue.length} cards\n\n**Words:** ${{ default: "Default library", selected: "Selected words only", fuzzy: "Fuzzy words only", known: "Know words only" }[modeSettings(lib, m.mode).scope]}\n\n**Auto pronunciation:** ${modeSettings(lib, m.mode).autoSpeak ? "On" : "Off"}`}
                 />
               }
               actions={
@@ -134,7 +141,15 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
                       }
                       push(
                         <PracticeSession
-                          queue={queue}
+                          queue={
+                            m.mode === "copy"
+                              ? queue
+                              : orderRecallQuestions(
+                                  queue,
+                                  lib,
+                                  orders[m.mode] ?? "scheduled",
+                                )
+                          }
                           library={lib}
                           autoSpeak={modeSettings(lib, m.mode).autoSpeak}
                           onFinished={refresh}
@@ -178,7 +193,33 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
                       title="Use Selected Words Only"
                       onAction={() => saveSource(m.mode, "selected")}
                     />
+                    <Action
+                      title="Use Fuzzy Words Only"
+                      onAction={() => saveSource(m.mode, "fuzzy")}
+                    />
+                    <Action
+                      title="Use Know Words Only"
+                      onAction={() => saveSource(m.mode, "known")}
+                    />
                   </ActionPanel.Submenu>
+                  {m.mode !== "copy" && (
+                    <ActionPanel.Submenu
+                      title={`Practice Order: ${recallOrders.find((o) => o.value === (orders[m.mode] ?? "scheduled"))!.title}`}
+                    >
+                      {recallOrders.map((order) => (
+                        <Action
+                          key={order.value}
+                          title={order.title}
+                          onAction={() =>
+                            setOrders((previous) => ({
+                              ...previous,
+                              [m.mode]: order.value,
+                            }))
+                          }
+                        />
+                      ))}
+                    </ActionPanel.Submenu>
+                  )}
                   <Action
                     title={
                       modeSettings(lib, m.mode).autoSpeak
@@ -514,6 +555,7 @@ function ActivePracticeSession({
   const working = useRef(false),
     { pop } = useNavigation();
   const window = practiceWindow(index, queue.length);
+  const submissionVersion = useRef(0);
   const current = queue[index];
   const q =
     current && wordUpdates[current.word.id]
@@ -538,6 +580,7 @@ function ActivePracticeSession({
       if (updated)
         setWordUpdates((previous) => ({ ...previous, [q.word.id]: updated! }));
       if (skip) {
+        submissionVersion.current++;
         await persistProgress(index + 1);
         stopSpeech();
         setIndex(index + 1);
@@ -556,17 +599,19 @@ function ActivePracticeSession({
   };
   useEffect(() => {
     stopSpeech();
-    if (
-      q &&
-      autoSpeak &&
-      !(speakAfterSubmit && (q.mode === "copy" || q.mode === "spelling"))
-    )
-      void speakTexts(practiceSpeechTexts(q, revealed)).catch(report);
+    if (q && autoSpeak) {
+      if (speakAfterSubmit && (q.mode === "copy" || q.mode === "spelling")) {
+        prepareSpeech(practiceSpeechTexts(q, true));
+      } else {
+        void speakTexts(practiceSpeechTexts(q, revealed)).catch(report);
+      }
+    }
     return () => stopSpeech();
   }, [current, autoSpeak, speakAfterSubmit]);
   const finish = async () => {
     if (ending.current) return;
     ending.current = true;
+    submissionVersion.current++;
     stopSpeech();
     try {
       await pending.current;
@@ -588,6 +633,7 @@ function ActivePracticeSession({
     if (!q || working.current || ending.current) return;
     working.current = true;
     setBusy(true);
+    const version = ++submissionVersion.current;
     const value = explicitAnswer ?? answer;
     const checked = checkAnswer(value, q.expected);
     const correct = q.mode === "meaning" ? rating !== 1 : checked.correct;
@@ -616,12 +662,16 @@ function ActivePracticeSession({
         !spokenSubmissions.current.has(q.id)
       ) {
         spokenSubmissions.current.add(q.id);
+        // Keep Enter available while audio loads or plays. A second submit cancels it.
+        working.current = false;
+        setBusy(false);
         try {
           await speakTexts(practiceSpeechTexts(q, true));
         } catch (error) {
           await report(error);
         }
       }
+      if (version !== submissionVersion.current || ending.current) return;
       if (!advance) return;
       setIndex((i) => i + 1);
       setSelected(queue[index + 1]?.id);
@@ -636,8 +686,10 @@ function ActivePracticeSession({
       pending.current = Promise.resolve();
       await report(e);
     } finally {
-      working.current = false;
-      setBusy(false);
+      if (version === submissionVersion.current) {
+        working.current = false;
+        setBusy(false);
+      }
     }
   };
   if (done)
@@ -823,8 +875,8 @@ function ActivePracticeSession({
         <Action
           title={
             speakAfterSubmit
-              ? "Auto Pronunciation: Switch to Word Entry"
-              : "Auto Pronunciation: Switch to After Submit"
+              ? "Auto Pronunciation (On Word Entry)"
+              : "Auto Pronunciation (After Submit)"
           }
           onAction={toggleSpeechTiming}
         />

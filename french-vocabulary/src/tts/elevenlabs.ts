@@ -159,6 +159,7 @@ export function elevenRequestBody(text: string, config: ElevenSynthesisConfig) {
 export async function requestElevenAudio(
   text: string,
   config: ElevenConfig,
+  cancellation?: AbortSignal,
 ): Promise<Buffer> {
   const attempted: string[] = [];
   const characters = characterCount(text);
@@ -168,6 +169,7 @@ export async function requestElevenAudio(
     state.keys.map((key) => key.secret),
   );
   while (true) {
+    cancellation?.throwIfAborted();
     const key = await updateKeys((state) =>
       reserveKey(state, attempted, characters),
     );
@@ -178,6 +180,7 @@ export async function requestElevenAudio(
           : "No active ElevenLabs keys; open Manage ElevenLabs Keys → Reactivate Now after correcting settings",
       );
     }
+    cancellation?.throwIfAborted();
     attempted.push(key.id);
     let audio: Buffer;
     let safeError = "Network error or timeout";
@@ -189,7 +192,9 @@ export async function requestElevenAudio(
         {
           method: "POST",
           redirect: "error",
-          signal: AbortSignal.timeout(25_000),
+          signal: cancellation
+            ? AbortSignal.any([cancellation, AbortSignal.timeout(25_000)])
+            : AbortSignal.timeout(25_000),
           headers: {
             "xi-api-key": key.secret,
             "Content-Type": "application/json",
@@ -211,6 +216,7 @@ export async function requestElevenAudio(
       safeError = "Invalid or empty MP3 response";
       audio = await readMp3Response(response);
     } catch {
+      cancellation?.throwIfAborted();
       lastError = safeError;
       await updateKeys((state) => {
         const current = state.keys.find(

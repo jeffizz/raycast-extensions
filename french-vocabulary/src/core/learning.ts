@@ -4,6 +4,7 @@ import {
   Mode,
   Word,
   Sense,
+  ModeSettings,
   canonical,
   searchKey,
   uid,
@@ -25,7 +26,7 @@ export function questions(
   mode: Mode,
   all = false,
   wordIds?: string[],
-  scope?: "default" | "selected",
+  scope?: ModeSettings["scope"],
 ): Question[] {
   const result: Question[] = [];
   for (const w of lib.words.filter(
@@ -66,6 +67,37 @@ export function questions(
         : 0) ||
       a.due - b.due ||
       a.word.word.localeCompare(b.word.word, "fr"),
+  );
+}
+export const recallOrders = [
+  { value: "scheduled", title: "Scheduled Order" },
+  { value: "import", title: "Import Order" },
+  { value: "import-desc", title: "Import Order (Reverse)" },
+  { value: "alphabetical", title: "A → Z" },
+  { value: "random", title: "Random" },
+] as const;
+export type RecallOrder = (typeof recallOrders)[number]["value"];
+export function orderRecallQuestions(
+  queue: Question[],
+  lib: Library,
+  order: RecallOrder,
+  random = Math.random,
+): Question[] {
+  if (order === "scheduled") return [...queue];
+  const ranks = new Map(lib.words.map((w, i) => [w.id, i]));
+  if (order === "random") {
+    const result = [...queue];
+    for (let i = result.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
+  }
+  return [...queue].sort((a, b) =>
+    order === "alphabetical"
+      ? a.word.word.localeCompare(b.word.word, "fr")
+      : (order === "import-desc" ? -1 : 1) *
+        ((ranks.get(a.word.id) ?? 0) - (ranks.get(b.word.id) ?? 0)),
   );
 }
 export function copyQuestionsInOrder(lib: Library, words: Word[]): Question[] {

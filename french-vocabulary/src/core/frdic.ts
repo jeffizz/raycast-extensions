@@ -24,10 +24,16 @@ export function looksLikeAudio(b: Uint8Array) {
       Buffer.from(b.subarray(4, 8)).toString() === "ftyp")
   );
 }
-export async function fetchSpeech(text: string, fetcher: typeof fetch = fetch) {
+export async function fetchSpeech(
+  text: string,
+  fetcher: typeof fetch = fetch,
+  cancellation?: AbortSignal,
+) {
   let { url, headers } = speechRequest(text);
   const initialOrigin = url.origin;
-  const signal = AbortSignal.timeout(25000);
+  const signal = cancellation
+    ? AbortSignal.any([cancellation, AbortSignal.timeout(25000)])
+    : AbortSignal.timeout(25000);
   for (let redirects = 0; redirects <= 5; redirects++) {
     let response: Response;
     try {

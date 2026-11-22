@@ -62,7 +62,7 @@ export type Review = {
 };
 export type ModeSettings = {
   autoSpeak: boolean;
-  scope: "default" | "selected";
+  scope: "default" | "selected" | "fuzzy" | "known";
   wordIds: string[];
 };
 export type LibrarySettings = {
@@ -211,7 +211,7 @@ export function validateLibrary(value: unknown): asserts value is Library {
         !["copy", "meaning", "spelling", "gender"].includes(mode) ||
         !setting ||
         typeof setting.autoSpeak !== "boolean" ||
-        !["default", "selected"].includes(setting.scope) ||
+        !["default", "selected", "fuzzy", "known"].includes(setting.scope) ||
         !Array.isArray(setting.wordIds) ||
         setting.wordIds.some((id: unknown) => typeof id !== "string")
       )

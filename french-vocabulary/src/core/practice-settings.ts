@@ -32,12 +32,16 @@ export function modeIncludes(
   lib: Library,
   mode: Mode,
   wordId: string,
-  scope?: "default" | "selected",
+  scope?: ModeSettings["scope"],
 ) {
   const settings = modeSettings(lib, mode);
-  return (
-    (scope ?? settings.scope) === "default" || settings.wordIds.includes(wordId)
-  );
+  const source = scope ?? settings.scope;
+  if (source === "default") return true;
+  if (source === "selected") return settings.wordIds.includes(wordId);
+  const familiarity = lib.words.find((w) => w.id === wordId)?.familiarity;
+  return source === "known"
+    ? familiarity === "known"
+    : familiarity === "fuzzy" || familiarity === "unknown";
 }
 
 export function toggleAutoSpeak(lib: Library, mode: Mode): boolean {

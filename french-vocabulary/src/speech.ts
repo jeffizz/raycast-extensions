@@ -22,12 +22,31 @@ import {
 } from "./tts/elevenlabs";
 let playback: ChildProcess | undefined,
   generation = 0;
+let download: AbortController | undefined;
+let prepared:
+  | { key: string; controller: AbortController; file: Promise<string> }
+  | undefined;
+export function prepareSpeech(texts: string[]) {
+  stopSpeech();
+  const parts = speechSegments(texts);
+  if (!parts.length) return;
+  const controller = new AbortController();
+  download = controller;
+  const file = audio(parts, controller.signal);
+  prepared = { key: JSON.stringify(parts), controller, file };
+  // Prefetch failures are reported only if playback is requested.
+  void file.catch(() => {});
+}
 export function stopSpeech() {
   generation++;
+  prepared = undefined;
+  download?.abort();
+  download = undefined;
   playback?.kill();
   playback = undefined;
 }
-async function audio(texts: string[]) {
+async function audio(texts: string[], signal: AbortSignal) {
+  signal.throwIfAborted();
   const prefs = getPreferences();
   const provider = chooseProvider(
     parseFrdicPercentage(prefs.randomFrdicPercentage),
@@ -56,19 +75,36 @@ async function audio(texts: string[]) {
   )
     return file;
   const data = config
-    ? await requestElevenAudio(text, config)
-    : await fetchSpeech(text);
+    ? await requestElevenAudio(text, config, signal)
+    : await fetchSpeech(text, fetch, signal);
+  signal.throwIfAborted();
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   await writeFile(tmp, data, { mode: 0o600 });
   await rename(tmp, file);
   return file;
 }
 export async function speakTexts(texts: string[]) {
-  stopSpeech();
-  const token = generation;
   const parts = speechSegments(texts);
+  const reuse = prepared?.key === JSON.stringify(parts) ? prepared : undefined;
+  if (reuse) {
+    generation++;
+    playback?.kill();
+    playback = undefined;
+    prepared = undefined;
+  } else stopSpeech();
+  const token = generation;
   if (!parts.length) return;
-  const file = await audio(parts);
+  const controller = reuse?.controller ?? new AbortController();
+  download = controller;
+  let file: string;
+  try {
+    file = await (reuse?.file ?? audio(parts, controller.signal));
+  } catch (error) {
+    if (controller.signal.aborted) return;
+    throw error;
+  } finally {
+    if (download === controller) download = undefined;
+  }
   if (token !== generation) return;
   await new Promise<void>((resolve, reject) => {
     const child = spawn("/usr/bin/afplay", [file], { stdio: "ignore" });
