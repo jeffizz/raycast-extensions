@@ -130,7 +130,7 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
                     title="Start Practice"
                     icon={Icon.Play}
                     onAction={() => {
-                      if (!queue.length) {
+                      if (!queue.length && m.mode === "copy") {
                         void showToast({
                           style: Toast.Style.Failure,
                           title: "No eligible cards",
@@ -151,6 +151,7 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
                                 )
                           }
                           library={lib}
+                          mode={m.mode}
                           autoSpeak={modeSettings(lib, m.mode).autoSpeak}
                           onFinished={refresh}
                         />,
@@ -256,6 +257,7 @@ type CopyProgress = {
   revealed: boolean;
 };
 type SessionProps = {
+  mode?: Mode;
   library?: Library;
   queue: Question[];
   manageWords?: boolean;
@@ -263,6 +265,9 @@ type SessionProps = {
   onFinished: () => Promise<void>;
 };
 export function PracticeSession(props: SessionProps) {
+  const mode = props.mode ?? props.queue[0]?.mode ?? "copy";
+  const sessionKey =
+    mode === "copy" ? "copy-spelling-session" : `practice-session-${mode}`;
   const [ready, setReady] = useState(false);
   const [progress, setProgress] = useState<CopyProgress>();
   const [choice, setChoice] = useState<"resume" | "new">();
@@ -285,12 +290,12 @@ export function PracticeSession(props: SessionProps) {
         `advance-after-correct-${props.queue[0]?.mode}`,
       );
       if (active) setAdvanceAfterCorrect(advance ?? true);
-      if (props.queue[0]?.mode === "copy") {
+      {
         const lib = props.library ?? (await store.load(false));
         if (active) setLibraryId(lib.libraryId);
         const stored = await store.getMeta<
           CopyProgress & { queue: (Question & { wordId?: string })[] }
-        >("copy-spelling-session");
+        >(sessionKey);
         if (
           stored?.libraryId === lib.libraryId &&
           stored.index < stored.queue.length
@@ -298,12 +303,16 @@ export function PracticeSession(props: SessionProps) {
           const words = new Map(lib.words.map((w) => [w.id, w]));
           const hydrate = (q: Question & { wordId?: string }) => {
             const word = words.get(q.wordId ?? q.word?.id);
-            return word
+            const sense =
+              mode === "gender"
+                ? word?.senses.find((s) => `${word.id}:gender:${s.id}` === q.id)
+                : word?.senses[0];
+            return word && sense
               ? {
                   ...q,
                   word,
-                  sense: word.senses[0],
-                  mode: "copy" as const,
+                  sense,
+                  mode,
                   due: 0,
                 }
               : undefined;
@@ -317,14 +326,20 @@ export function PracticeSession(props: SessionProps) {
             return item &&
               !item.word.archived &&
               item.word.practice &&
-              speechWord(item.word) === item.expected
+              (mode === "gender"
+                ? item.sense.gender === item.expected &&
+                  ["m", "f"].includes(item.expected)
+                : speechWord(item.word) === item.expected)
               ? [item]
               : [];
           });
-          const ordered = [
-            ...remaining.filter((q) => q.word.familiarity !== "known"),
-            ...remaining.filter((q) => q.word.familiarity === "known"),
-          ];
+          const ordered =
+            mode === "copy"
+              ? [
+                  ...remaining.filter((q) => q.word.familiarity !== "known"),
+                  ...remaining.filter((q) => q.word.familiarity === "known"),
+                ]
+              : remaining;
           const sameQuestion =
             ordered[0]?.id === stored.queue[stored.index]?.id;
           if (active && ordered.length)
@@ -346,10 +361,36 @@ export function PracticeSession(props: SessionProps) {
       active = false;
     };
   }, []);
-  if (!ready) return <List isLoading navigationTitle="Copy Spelling" />;
-  if (props.queue[0]?.mode === "copy" && progress && !choice)
+  if (!ready)
     return (
-      <List isLoading={!ready} isShowingDetail navigationTitle="Copy Spelling">
+      <List
+        isLoading
+        navigationTitle={
+          mode === "copy"
+            ? "Copy Spelling"
+            : mode === "meaning"
+              ? "Recall Meaning"
+              : mode === "spelling"
+                ? "Recall Spelling"
+                : "Noun Gender"
+        }
+      />
+    );
+  if (progress && !choice)
+    return (
+      <List
+        isLoading={!ready}
+        isShowingDetail
+        navigationTitle={
+          mode === "copy"
+            ? "Copy Spelling"
+            : mode === "meaning"
+              ? "Recall Meaning"
+              : mode === "spelling"
+                ? "Recall Spelling"
+                : "Noun Gender"
+        }
+      >
         {progress && (
           <List.Item
             title="Resume Session"
@@ -387,16 +428,34 @@ export function PracticeSession(props: SessionProps) {
                   if (
                     progress &&
                     !(await confirmAlert({
-                      title: "Replace saved Copy Spelling progress?",
+                      title: "Replace saved practice progress?",
                       primaryAction: { title: "Start New Session" },
                     }))
                   )
                     return;
+                  if (!props.queue.length) {
+                    await showToast({
+                      style: Toast.Style.Failure,
+                      title: "No eligible cards",
+                      message:
+                        "Choose All Included Words or change Practice Source to start a new session.",
+                    });
+                    return;
+                  }
                   setChoice("new");
                 }}
               />
             </ActionPanel>
           }
+        />
+      </List>
+    );
+  if (!props.queue.length && choice !== "resume")
+    return (
+      <List navigationTitle="Practice">
+        <List.EmptyView
+          title="No eligible cards"
+          description="Choose All Included Words or change Practice Source."
         />
       </List>
     );
@@ -406,6 +465,7 @@ export function PracticeSession(props: SessionProps) {
       queue={choice === "resume" ? progress!.queue : props.queue}
       initialProgress={choice === "resume" ? progress : undefined}
       sessionLibraryId={libraryId}
+      sessionKey={sessionKey}
       initialAutoAdvance={autoAdvance}
       initialSpeakAfterSubmit={speakAfterSubmit}
       initialAdvanceAfterCorrect={advanceAfterCorrect}
@@ -420,6 +480,7 @@ function ActivePracticeSession({
   manageWords = false,
   initialProgress,
   sessionLibraryId,
+  sessionKey,
   initialAutoAdvance,
   initialSpeakAfterSubmit,
   initialAdvanceAfterCorrect,
@@ -428,6 +489,7 @@ function ActivePracticeSession({
   queue: Question[];
   initialProgress?: CopyProgress;
   sessionLibraryId: string;
+  sessionKey: string;
   initialAutoAdvance: boolean;
   initialSpeakAfterSubmit: boolean;
   initialAdvanceAfterCorrect: boolean;
@@ -522,7 +584,6 @@ function ActivePracticeSession({
   const resultLog = useRef(initialProgress?.results ?? []);
   const progressWrites = useRef<Promise<unknown>>(Promise.resolve());
   const persistProgress = (nextIndex: number, text = "", shown = false) => {
-    if (queue[0]?.mode !== "copy") return Promise.resolve();
     const snapshot = {
       queue: compactCopyQueue(queue),
       index: nextIndex,
@@ -535,7 +596,7 @@ function ActivePracticeSession({
       .catch(() => {})
       .then(async () => {
         await store.setMeta(
-          "copy-spelling-session",
+          sessionKey,
           nextIndex >= queue.length
             ? null
             : { ...snapshot, libraryId: sessionLibraryId },
@@ -775,7 +836,10 @@ function ActivePracticeSession({
         <Action
           title="Reveal Meaning"
           icon={Icon.Eye}
-          onAction={() => setRevealed(true)}
+          onAction={() => {
+            setRevealed(true);
+            void persistProgress(index, answer, true).catch(report);
+          }}
         />
       )}
       {!revealed && q.mode === "gender" && (
@@ -975,7 +1039,7 @@ function ActivePracticeSession({
       onSelectionChange={(id) => {
         if (id) setSelected(id);
       }}
-      navigationTitle={`${q.mode} · ${index + 1} / ${queue.length}`}
+      navigationTitle={`${{ copy: "Copy Spelling", spelling: "Recall Spelling", meaning: "Recall Meaning", gender: "Noun Gender" }[q.mode]} · ${index + 1} / ${queue.length}`}
       actions={actions}
     >
       {queue.slice(window.start, window.end).map((item, offset) => {

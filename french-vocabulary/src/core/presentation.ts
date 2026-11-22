@@ -78,13 +78,12 @@ export function spellingMarkdown(
   showComparison = true,
 ) {
   // Recall spelling must not reveal the target or article phrases before checking.
-  const title =
-    copy || revealed ? (copy ? expected : w.word) : "Recall Spelling";
+  const title = copy || revealed ? (copy ? expected : w.word) : "";
   const details =
     copy || revealed
       ? wordDetails(w, false, language)
       : w.senses.map((s) => senseMarkdown(s, language)).join("\n\n---\n\n");
-  return `# ${md(title)}\n\n${revealed && showComparison ? `${spellingDiff(answer, expected)}\n\n` : ""}${details}`;
+  return `${title ? `# ${md(title)}\n\n` : ""}${revealed && showComparison ? `${spellingDiff(answer, expected)}\n\n` : ""}${details}`;
 }
 export function groupName(words: Word[]) {
   return words.map((w) => w.word).join(" · ");
