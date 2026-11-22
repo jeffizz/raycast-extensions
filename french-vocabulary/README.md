@@ -141,6 +141,12 @@ Typed answers preserve accents and capitalization. Copy Spelling and Recall Spel
 
 Each checked spelling/gender answer and each graded meaning answer is committed immediately to local SQLite, independently of completing the queue. Leaving early does not discard these records, including an error still displayed for comparison. Unchecked partial input is not an answer and is not saved. Copy attempts do not change FSRS; correct recall spelling uses Good, incorrect recall spelling uses Again. A new session builds a new due/new queue from persisted scheduling rather than resuming an exact queue cursor. Answers, End Session and completion check WebDAV backup intervals when enabled; closing the command directly preserves committed local records but does not guarantee remote backup. Short-term due cards are included when starting the next finite session.
 
+### Daily recall limits
+
+Recall Meaning, Recall Spelling and Noun Gender each provide **Actions → Daily Limits**. Defaults: 10 new cards per local calendar day, unlimited review cards. Blank review limit means unlimited; zero pauses a category. Settings persist in library backups. Counts use distinct submitted cards across all sources, not reserved queue slots; repeated reviews do not use additional slots, and new cards first studied today remain in today's new category. Due reviews precede new cards; selected ordering applies within each category. The mode details show today's usage and due cards in the current source.
+
+Resumed queues preserve their order and check today's allowance on submission. If the allowance is exhausted, progress remains saved; continue tomorrow or increase the limit. **All Included Words (Extra Practice)** bypasses due-date and daily limits for a new session, but still records answers and updates FSRS; its activity also counts toward today's usage. Resuming always checks daily limits. Copy Spelling is unaffected. Daily limits never change FSRS timestamps by themselves.
+
 ## SQLite and WebDAV backup
 
 All reads/edits are local in `environment.supportPath/vocabulary.sqlite`. No per-word WebDAV query. **No manual Local Snapshot task is required.** Safety copies are automatically created before imports/restores/resets; these are internal recovery protection, not the main backup workflow.

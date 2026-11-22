@@ -11,6 +11,8 @@ import {
 } from "@raycast/api";
 import { useEffect, useRef, useState } from "react";
 import { Grade } from "ts-fsrs";
+import { dailySummary, limitDailyQueue } from "./core/daily-limits";
+import { DailyLimits } from "./components/daily-limits";
 import { compactCopyQueue, practiceWindow } from "./core/copy-session";
 import {
   checkAnswer,
@@ -104,7 +106,10 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
           onChange={(v) => setAll(v === "all")}
         >
           <List.Dropdown.Item value="due" title="Due and New" />
-          <List.Dropdown.Item value="all" title="All Included Words" />
+          <List.Dropdown.Item
+            value="all"
+            title="All Included Words (Extra Practice)"
+          />
         </List.Dropdown>
       }
     >
@@ -112,7 +117,27 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
         title={`${lib.words.filter((w) => w.practice && !w.archived && (!wordIds || wordIds.includes(w.id))).length} active words included`}
       >
         {modes.map((m) => {
-          const queue = questions(lib, m.mode, all, wordIds, undefined);
+          const candidates = questions(lib, m.mode, all, wordIds, undefined);
+          const ordered =
+            m.mode === "copy"
+              ? candidates
+              : orderRecallQuestions(
+                  candidates,
+                  lib,
+                  orders[m.mode] ?? "scheduled",
+                );
+          const queue = all ? ordered : limitDailyQueue(lib, m.mode, ordered);
+          const summary =
+            m.mode === "copy"
+              ? ""
+              : "\n\n" +
+                dailySummary(lib, m.mode) +
+                "\n\n**Due remaining in source:** " +
+                candidates.filter((q) => lib.cards.some((c) => c.id === q.id))
+                  .length +
+                (all
+                  ? "\n\nExtra practice: daily limits and due dates are bypassed; answers still update FSRS."
+                  : "");
           return (
             <List.Item
               key={m.mode}
@@ -121,7 +146,7 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
               accessories={[{ text: `${queue.length} cards` }]}
               detail={
                 <List.Item.Detail
-                  markdown={`# ${m.title}\n\n${m.description}\n\n${queue.length} cards\n\n**Words:** ${{ default: "Default library", selected: "Selected words only", fuzzy: "Fuzzy words only", known: "Know words only" }[modeSettings(lib, m.mode).scope]}\n\n**Auto pronunciation:** ${modeSettings(lib, m.mode).autoSpeak ? "On" : "Off"}`}
+                  markdown={`# ${m.title}\n\n${m.description}\n\n${queue.length} cards\n\n**Words:** ${{ default: "Default library", selected: "Selected words only", fuzzy: "Fuzzy words only", known: "Know words only" }[modeSettings(lib, m.mode).scope]}\n\n**Auto pronunciation:** ${modeSettings(lib, m.mode).autoSpeak ? "On" : "Off"}${summary}`}
                 />
               }
               actions={
@@ -141,15 +166,8 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
                       }
                       push(
                         <PracticeSession
-                          queue={
-                            m.mode === "copy"
-                              ? queue
-                              : orderRecallQuestions(
-                                  queue,
-                                  lib,
-                                  orders[m.mode] ?? "scheduled",
-                                )
-                          }
+                          queue={queue}
+                          extraPractice={all}
                           library={lib}
                           mode={m.mode}
                           autoSpeak={modeSettings(lib, m.mode).autoSpeak}
@@ -158,6 +176,20 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
                       );
                     }}
                   />
+                  {m.mode !== "copy" && (
+                    <Action
+                      title="Daily Limits"
+                      onAction={() =>
+                        push(
+                          <DailyLimits
+                            library={lib}
+                            mode={m.mode}
+                            refresh={refresh}
+                          />,
+                        )
+                      }
+                    />
+                  )}
                   <Action
                     title="Clear Selected Words for This Mode"
                     onAction={async () => {
@@ -258,6 +290,7 @@ type CopyProgress = {
 };
 type SessionProps = {
   mode?: Mode;
+  extraPractice?: boolean;
   library?: Library;
   queue: Question[];
   manageWords?: boolean;
@@ -466,6 +499,7 @@ export function PracticeSession(props: SessionProps) {
       initialProgress={choice === "resume" ? progress : undefined}
       sessionLibraryId={libraryId}
       sessionKey={sessionKey}
+      extraPractice={choice === "resume" ? false : props.extraPractice}
       initialAutoAdvance={autoAdvance}
       initialSpeakAfterSubmit={speakAfterSubmit}
       initialAdvanceAfterCorrect={advanceAfterCorrect}
@@ -481,6 +515,7 @@ function ActivePracticeSession({
   initialProgress,
   sessionLibraryId,
   sessionKey,
+  extraPractice = false,
   initialAutoAdvance,
   initialSpeakAfterSubmit,
   initialAdvanceAfterCorrect,
@@ -490,6 +525,7 @@ function ActivePracticeSession({
   initialProgress?: CopyProgress;
   sessionLibraryId: string;
   sessionKey: string;
+  extraPractice?: boolean;
   initialAutoAdvance: boolean;
   initialSpeakAfterSubmit: boolean;
   initialAdvanceAfterCorrect: boolean;
@@ -702,9 +738,13 @@ function ActivePracticeSession({
     const grade: Grade = q.mode !== "meaning" && !correct ? 1 : rating;
     try {
       if (!saved.current.has(q.id)) {
-        pending.current = store.mutate((l) =>
-          recordAnswer(l, q, grade, value, correct),
-        );
+        pending.current = store.mutate((l) => {
+          if (!extraPractice && !limitDailyQueue(l, q.mode, [q]).length)
+            throw Error(
+              "Daily limit reached. Progress is preserved. Continue tomorrow, increase Daily Limits, or start All Included Words (Extra Practice).",
+            );
+          recordAnswer(l, q, grade, value, correct);
+        });
         await pending.current;
         void autoBackup();
         saved.current.add(q.id);

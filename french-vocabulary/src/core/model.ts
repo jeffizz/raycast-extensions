@@ -61,6 +61,8 @@ export type Review = {
   log?: unknown;
 };
 export type ModeSettings = {
+  dailyNew?: number;
+  dailyReview?: number | null;
   autoSpeak: boolean;
   scope: "default" | "selected" | "fuzzy" | "known";
   wordIds: string[];
@@ -213,7 +215,10 @@ export function validateLibrary(value: unknown): asserts value is Library {
         typeof setting.autoSpeak !== "boolean" ||
         !["default", "selected", "fuzzy", "known"].includes(setting.scope) ||
         !Array.isArray(setting.wordIds) ||
-        setting.wordIds.some((id: unknown) => typeof id !== "string")
+        setting.wordIds.some((id: unknown) => typeof id !== "string") ||
+        [setting.dailyNew, setting.dailyReview].some(
+          (v) => v != null && (!Number.isSafeInteger(v) || v < 0 || v > 100000),
+        )
       )
         throw Error("Invalid practice settings.");
     }
