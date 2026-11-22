@@ -152,7 +152,7 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
               accessories={[{ text: `${queue.length} cards` }]}
               detail={
                 <List.Item.Detail
-                  markdown={`# ${m.title}\n\n${m.description}\n\n${queue.length} cards\n\n**Words:** ${{ default: "Default library", selected: "Selected words only", fuzzy: "Fuzzy words only", known: "Know words only" }[modeSettings(lib, m.mode).scope]}\n\n**Auto pronunciation:** ${modeSettings(lib, m.mode).autoSpeak ? "On" : "Off"}${summary}\n\n**Collection:** ${collectionLabel}\n\n**Part of speech:** ${filters.pos}\n\n**Familiarity:** ${{ all: "All", unmarked: "No Status", fuzzy: "Fuzzy", known: "Know" }[filters.familiarity]}`}
+                  markdown={`# ${m.title}\n\n${m.description}\n\n${queue.length} cards\n\n**Auto pronunciation:** ${modeSettings(lib, m.mode).autoSpeak ? "On" : "Off"}${summary}\n\n**Collection:** ${collectionLabel}\n\n**Part of speech:** ${filters.pos}\n\n**Familiarity:** ${{ all: "All", unmarked: "No Status", fuzzy: "Fuzzy", known: "Know" }[filters.familiarity]}`}
                 />
               }
               actions={
@@ -203,33 +203,6 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
                       }
                     />
                   )}
-                  <Action
-                    title="Clear Selected Words for This Mode"
-                    onAction={async () => {
-                      if (
-                        !(await confirmAlert({
-                          title: "Clear selected words for this mode?",
-                          message:
-                            "Only this mode’s selected list is cleared. Vocabulary, global practice inclusion and review history are preserved.",
-                        }))
-                      )
-                        return;
-                      try {
-                        await store.mutate((l) => {
-                          l.settings ??= {};
-                          l.settings.practice ??= {};
-                          l.settings.practice[m.mode] = {
-                            ...modeSettings(l, m.mode),
-                            wordIds: [],
-                          };
-                        });
-                        await refresh();
-                        void autoBackup();
-                      } catch (e) {
-                        await report(e);
-                      }
-                    }}
-                  />
                   <Action
                     title="Practice Source"
                     onAction={() =>

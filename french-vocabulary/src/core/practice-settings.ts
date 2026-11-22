@@ -17,27 +17,17 @@ export const practiceModes: { mode: Mode; title: string }[] = [
   { mode: "gender", title: "Noun Gender" },
 ];
 export function modeSettings(lib: Library, mode: Mode): ModeSettings {
+  const saved = lib.settings?.practice?.[mode];
+  // Legacy selected lists no longer restrict practice. Keep old backups readable.
+  if (saved?.scope === "selected")
+    return { ...saved, scope: "default", wordIds: [] };
   return (
-    lib.settings?.practice?.[mode] ?? {
+    saved ?? {
       autoSpeak: false,
       scope: "default",
       wordIds: [],
     }
   );
-}
-// Append without replacing existing mode selections or pronunciation preferences.
-export function addModeWords(lib: Library, ids: string[], targets: string[]) {
-  lib.settings ??= {};
-  lib.settings.practice ??= {};
-  for (const { mode } of practiceModes) {
-    if (!targets.includes(mode)) continue;
-    const setting = modeSettings(lib, mode);
-    lib.settings.practice[mode] = {
-      ...setting,
-      scope: "selected",
-      wordIds: [...new Set([...setting.wordIds, ...ids])],
-    };
-  }
 }
 export function practiceSourceFilters(
   settings: ModeSettings,
@@ -69,15 +59,12 @@ export function modeIncludes(
   candidate?: Word,
 ) {
   const settings = modeSettings(lib, mode);
-  const source = scope ?? settings.scope;
   const word = candidate ?? lib.words.find((w) => w.id === wordId);
   if (!word) return false;
   if (scope !== undefined) {
-    if (scope === "default") return true;
-    if (scope === "selected") return settings.wordIds.includes(wordId);
+    if (scope === "default" || scope === "selected") return true;
     return matchesWordFilters(word, "all", scope);
   }
-  if (source === "selected" && !settings.wordIds.includes(wordId)) return false;
   const filters = practiceSourceFilters(settings);
   if (!matchesWordFilters(word, filters.pos, filters.familiarity)) return false;
   return (

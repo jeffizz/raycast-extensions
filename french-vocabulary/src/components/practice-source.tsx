@@ -6,7 +6,6 @@ import { modeSettings, practiceSourceFilters } from "../core/practice-settings";
 import { autoBackup, report, store } from "../runtime";
 
 type Values = {
-  scope: string;
   collectionIds: string[];
   pos: string;
   familiarity: string;
@@ -27,7 +26,6 @@ export function PracticeSource({
     initialValues: {
       ...filters,
       collectionIds: collectionSelectionIds(filters.collectionId),
-      scope: settings.scope === "selected" ? "selected" : "default",
     },
     onSubmit: async (values) => {
       try {
@@ -50,7 +48,8 @@ export function PracticeSource({
           lib.settings.practice ??= {};
           lib.settings.practice[mode] = {
             ...modeSettings(lib, mode),
-            scope: values.scope as "default" | "selected",
+            scope: "default",
+            wordIds: [],
             sourceFilters: {
               collectionId: "",
               collectionIds: [...new Set(values.collectionIds)],
@@ -81,10 +80,6 @@ export function PracticeSource({
       }
     >
       <Form.Description text="Filters combine, just like Browse. Settings are saved separately for each mode. Archived words and words excluded from practice remain ineligible. FSRS due dates and daily limits still apply. New sessions use these filters; Resume keeps the saved queue." />
-      <Form.Dropdown title="Word Library" {...itemProps.scope}>
-        <Form.Dropdown.Item value="default" title="Default Library" />
-        <Form.Dropdown.Item value="selected" title="Selected Words Only" />
-      </Form.Dropdown>
       <Form.TagPicker
         title="Collections"
         info="Match any selected collection. Leave empty for all words."

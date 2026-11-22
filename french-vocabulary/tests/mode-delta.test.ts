@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { emptyLibrary, validateLibrary } from "../src/core/model";
 import { applyImport } from "../src/core/importer";
 import { questions, recordAnswer } from "../src/core/learning";
-import { addModeWords, modeSettings } from "../src/core/practice-settings";
+import { modeSettings } from "../src/core/practice-settings";
 import { applyDelta, baseline, makeDelta } from "../src/core/delta";
 import { backupDue } from "../src/core/backup";
 
@@ -19,7 +19,7 @@ function sample() {
   );
   return lib;
 }
-test("mode selection and audio are independent, overridable and still respect global exclusions", () => {
+test("legacy selected lists fall back to the library and still respect global exclusions", () => {
   const lib = sample();
   const id = lib.words[0].id;
   lib.settings = {
@@ -28,7 +28,7 @@ test("mode selection and audio are independent, overridable and still respect gl
       copy: { autoSpeak: true, scope: "default", wordIds: [] },
     },
   };
-  assert.equal(questions(lib, "spelling", true).length, 1);
+  assert.equal(questions(lib, "spelling", true).length, 2);
   assert.equal(questions(lib, "meaning", true).length, 2);
   assert.equal(modeSettings(lib, "copy").autoSpeak, true);
   assert.equal(modeSettings(lib, "spelling").autoSpeak, false);
@@ -36,14 +36,14 @@ test("mode selection and audio are independent, overridable and still respect gl
     questions(lib, "spelling", true, undefined, "default").length,
     2,
   );
-  assert.equal(questions(lib, "spelling", true, [lib.words[1].id]).length, 0);
+  assert.equal(questions(lib, "spelling", true, [lib.words[1].id]).length, 1);
   lib.words[0].practice = false;
-  assert.equal(questions(lib, "spelling", true).length, 0);
+  assert.equal(questions(lib, "spelling", true).length, 1);
   lib.words[0].practice = true;
   lib.words[0].archived = true;
-  assert.equal(questions(lib, "spelling", true).length, 0);
+  assert.equal(questions(lib, "spelling", true).length, 1);
   lib.settings.practice!.spelling!.wordIds = [];
-  assert.equal(questions(lib, "spelling", true).length, 0);
+  assert.equal(questions(lib, "spelling", true).length, 1);
 });
 test("delta round trip preserves settings, reviews, cards, edits, order and deletions", () => {
   const lib = sample();
@@ -125,24 +125,4 @@ test("activity scheduling chooses initial full, interval increment, overdue full
   lib.settings = { backup: { fullHours: 1, incrementalMinutes: 1 } };
   assert.equal(backupDue(lib, state, at + 3600000), "full");
   validateLibrary(lib);
-});
-
-test("multi-mode destinations append, deduplicate and preserve audio and other modes", () => {
-  const lib = sample();
-  const [a, b] = lib.words.map((w) => w.id);
-  lib.settings = {
-    practice: { spelling: { autoSpeak: true, scope: "default", wordIds: [a] } },
-  };
-  addModeWords(lib, [b, b], ["spelling", "gender"]);
-  assert.deepEqual(modeSettings(lib, "spelling"), {
-    autoSpeak: true,
-    scope: "selected",
-    wordIds: [a, b],
-  });
-  assert.deepEqual(modeSettings(lib, "gender").wordIds, [b]);
-  assert.equal(modeSettings(lib, "meaning").scope, "default");
-  assert.equal(questions(lib, "gender", true).length, 1);
-  const before = structuredClone(lib.settings.practice);
-  addModeWords(lib, [a], ["default"]);
-  assert.deepEqual(lib.settings.practice, before);
 });

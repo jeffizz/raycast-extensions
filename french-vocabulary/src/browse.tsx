@@ -41,7 +41,6 @@ import { PracticeSession } from "./practice";
 import { copyQuestionsInOrder } from "./core/learning";
 import { modeSettings } from "./core/practice-settings";
 import { statusIcon } from "./components/status";
-import { addModeWords, practiceModes } from "./core/practice-settings";
 import {
   ProcessingSession,
   startProcessing,
@@ -61,7 +60,7 @@ export default function Browse() {
 }
 export function VocabularyList({ archived = false }: { archived?: boolean }) {
   const { lib, loading, refresh } = useLibrary(),
-    { push, pop } = useNavigation();
+    { push } = useNavigation();
   const {
     value: listLayout = false,
     setValue: setListLayout,
@@ -379,9 +378,8 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
     globalSearch,
   ]);
   const batch = async (
-    kind: "add" | "remove" | "archive" | "fuzzy" | "known" | "unmarked",
+    kind: "remove" | "archive" | "fuzzy" | "known" | "unmarked",
     ids = marked,
-    targets: string[] = ["default"],
   ) => {
     if (batchLock.current) return false;
     batchLock.current = true;
@@ -397,10 +395,9 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
         for (const w of l.words)
           if (set.has(w.id)) {
             if (kind === "archive") w.archived = !archived;
-            else setPractice(w, kind === "add");
+            else setPractice(w, false);
             w.updatedAt = new Date().toISOString();
           }
-        if (kind === "add") addModeWords(l, ids, targets);
       });
       setMarked([]);
       setRangeStart(undefined);
@@ -417,16 +414,6 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
   };
   const mark = (id: string) =>
     setMarked((a) => (a.includes(id) ? a.filter((x) => x !== id) : [...a, id]));
-  const batchForm = () =>
-    push(
-      <BatchPicker
-        words={words}
-        initial={marked}
-        onSave={async (ids, targets) => {
-          if (await batch("add", ids, targets)) pop();
-        }}
-      />,
-    );
   const markedSet = useMemo(() => new Set(marked), [marked]);
   const activeId = words.some((w) => w.id === selection)
     ? selection
@@ -809,14 +796,6 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
                   {layoutAction}
                   {collectionActions()}
                   {searchActions}
-                  {marked.length > 0 && (
-                    <Action
-                      title={`Add ${marked.length} Selected Words to Practice`}
-                      icon={Icon.Bolt}
-                      shortcut={{ modifiers: ["cmd"], key: "t" }}
-                      onAction={() => batch("add")}
-                    />
-                  )}
                   <WordActions
                     word={w}
                     refresh={safeRefresh}
@@ -885,10 +864,6 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
                       title="Select All Filtered Words"
                       shortcut={{ modifiers: ["cmd", "shift"], key: "x" }}
                       onAction={() => setMarked(words.map((w) => w.id))}
-                    />
-                    <Action
-                      title="Add Selection to Practice"
-                      onAction={batchForm}
                     />
                     {marked.length > 0 && (
                       <>
@@ -996,62 +971,6 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
         ))}
       </List.Section>
     </List>
-  );
-}
-function BatchPicker({
-  words,
-  initial,
-  onSave,
-}: {
-  words: Word[];
-  initial: string[];
-  onSave: (ids: string[], targets: string[]) => Promise<void>;
-}) {
-  const [busy, setBusy] = useState(false);
-  return (
-    <Form
-      isLoading={busy}
-      navigationTitle="Add Selection to Practice"
-      actions={
-        <ActionPanel>
-          <Action.SubmitForm
-            title="Add Selected Words"
-            onSubmit={async (v: { ids: string[]; targets: string[] }) => {
-              if (busy) return;
-              if (!v.ids.length || !v.targets.length) {
-                await report(
-                  Error("Choose at least one word and one destination."),
-                );
-                return;
-              }
-              setBusy(true);
-              try {
-                await onSave(v.ids, v.targets);
-              } finally {
-                setBusy(false);
-              }
-            }}
-          />
-        </ActionPanel>
-      }
-    >
-      <Form.TagPicker id="ids" title="Words" defaultValue={initial}>
-        {words.map((w) => (
-          <Form.TagPicker.Item key={w.id} value={w.id} title={w.word} />
-        ))}
-      </Form.TagPicker>
-      <Form.TagPicker
-        id="targets"
-        title="Practice Libraries"
-        defaultValue={["default"]}
-      >
-        <Form.TagPicker.Item value="default" title="Default Library" />
-        {practiceModes.map(({ mode, title }) => (
-          <Form.TagPicker.Item key={mode} value={mode} title={title} />
-        ))}
-      </Form.TagPicker>
-      <Form.Description text="Mode destinations append words to that mode’s selected list and activate Selected Words Only. All added words are globally enabled for practice; other modes using Default Library can also include them. Remove Selection from Practice disables them across all modes." />
-    </Form>
   );
 }
 function FilterForm({

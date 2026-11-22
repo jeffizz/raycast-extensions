@@ -39,7 +39,7 @@ function sample() {
   lib.words[2].familiarity = "unknown";
   return lib;
 }
-test("practice source intersects selection, collection, POS and familiarity using Browse semantics", () => {
+test("practice source ignores retired lists and intersects collection, POS and familiarity", () => {
   const lib = sample();
   const id = createCollection(lib, "Unit");
   changeCollectionMembers(
@@ -69,7 +69,7 @@ test("practice source intersects selection, collection, POS and familiarity usin
   );
   assert.equal(JSON.stringify(lib), before);
   lib.settings!.practice!.meaning!.wordIds = [lib.words[0].id];
-  assert.equal(questions(lib, "meaning", true).length, 1);
+  assert.equal(questions(lib, "meaning", true).length, 2);
   const q = questions(lib, "meaning", true)[0];
   recordAnswer(lib, q, 3, "", true);
   const card = JSON.stringify(lib.cards[0]);

@@ -62,7 +62,7 @@ test("Browse copy spelling preserves the supplied order and filters ineligible w
   assert.deepEqual(copyQuestionsInOrder(lib, [lib.words[2]]), []);
 });
 import { modeSettings, toggleAutoSpeak } from "../src/core/practice-settings";
-test("pronunciation toggles persist independently and preserve mode selections", async () => {
+test("pronunciation toggles persist independently and normalize retired mode selections", async () => {
   const root = await mkdtemp(join(tmpdir(), "fv-audio-toggle-"));
   try {
     const store = new Store(root);
@@ -77,8 +77,8 @@ test("pronunciation toggles persist independently and preserve mode selections",
     });
     const restored = await new Store(root).load();
     assert.equal(modeSettings(restored, "copy").autoSpeak, true);
-    assert.deepEqual(modeSettings(restored, "copy").wordIds, ["chosen"]);
-    assert.equal(modeSettings(restored, "copy").scope, "selected");
+    assert.deepEqual(modeSettings(restored, "copy").wordIds, []);
+    assert.equal(modeSettings(restored, "copy").scope, "default");
     assert.equal(modeSettings(restored, "gender").autoSpeak, false);
     assert.equal(modeSettings(restored, "meaning").autoSpeak, false);
   } finally {
