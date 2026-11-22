@@ -26,7 +26,12 @@ import {
 import { useLocalStorage, usePromise } from "@raycast/utils";
 import { dailySummary, limitDailyQueue } from "./core/daily-limits";
 import { DailyLimits } from "./components/daily-limits";
-import { compactCopyQueue, practiceWindow } from "./core/copy-session";
+import {
+  compactCopyQueue,
+  practiceWindow,
+  SessionResult,
+  sessionRatingLabels,
+} from "./core/copy-session";
 import {
   checkAnswer,
   Question,
@@ -271,7 +276,7 @@ type CopyProgress = {
   queue: Question[];
   index: number;
   saved: string[];
-  results: { correct: boolean; rating: number }[];
+  results: SessionResult[];
   answer: string;
   revealed: boolean;
 };
@@ -530,7 +535,7 @@ function ActivePracticeSession({
     [answer, setAnswer] = useState(initialProgress?.answer ?? ""),
     [revealed, setRevealed] = useState(initialProgress?.revealed ?? false),
     [busy, setBusy] = useState(false),
-    [results, setResults] = useState<{ correct: boolean; rating: number }[]>(
+    [results, setResults] = useState<SessionResult[]>(
       initialProgress?.results ?? [],
     ),
     [selected, setSelected] = useState(queue[initialProgress?.index ?? 0]?.id);
@@ -636,6 +641,7 @@ function ActivePracticeSession({
   };
   const saved = useRef(new Set<string>(initialProgress?.saved));
   const resultLog = useRef(initialProgress?.results ?? []);
+  const ratingLabels = sessionRatingLabels(results, [...saved.current]);
   const progressWrites = useRef<Promise<unknown>>(Promise.resolve());
   const persistProgress = (nextIndex: number, text = "", shown = false) => {
     const snapshot = {
@@ -785,7 +791,10 @@ function ActivePracticeSession({
         await pending.current;
         void autoBackup();
         saved.current.add(q.id);
-        resultLog.current = [...resultLog.current, { correct, rating: grade }];
+        resultLog.current = [
+          ...resultLog.current,
+          { correct, rating: grade, questionId: q.id },
+        ];
         setResults(resultLog.current);
       }
       await persistProgress(
@@ -1220,16 +1229,27 @@ function ActivePracticeSession({
                       : `${i + 1}`
                 }
                 subtitle={listLayout ? row.subtitle : undefined}
-                accessories={
-                  (listLayout || (copy && manageWords)) && familiarityIcon
+                accessories={[
+                  ...(listLayout &&
+                  q.mode === "meaning" &&
+                  i < index &&
+                  ratingLabels.has(item.id)
+                    ? [
+                        {
+                          text: ratingLabels.get(item.id)!,
+                          tooltip: "Rating in this session",
+                        },
+                      ]
+                    : []),
+                  ...((listLayout || (copy && manageWords)) && familiarityIcon
                     ? [
                         {
                           icon: { source: familiarityIcon },
                           tooltip: `Familiarity: ${familiarity}`,
                         },
                       ]
-                    : undefined
-                }
+                    : []),
+                ]}
                 icon={
                   i < index
                     ? Icon.CheckCircle
