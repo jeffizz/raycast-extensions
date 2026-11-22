@@ -11,6 +11,7 @@ import {
 } from "@raycast/api";
 import { useEffect, useRef, useState } from "react";
 import { Grade } from "ts-fsrs";
+import { useLocalStorage } from "@raycast/utils";
 import { dailySummary, limitDailyQueue } from "./core/daily-limits";
 import { DailyLimits } from "./components/daily-limits";
 import { compactCopyQueue, practiceWindow } from "./core/copy-session";
@@ -32,6 +33,7 @@ import { escapeMD } from "./components/word";
 import { statusIcon } from "./components/status";
 import {
   translations,
+  translationValues,
   sessionTranslationLanguage,
   spellingMarkdown,
   spellingDiff,
@@ -541,6 +543,8 @@ function ActivePracticeSession({
       initialProgress?.results ?? [],
     ),
     [selected, setSelected] = useState(queue[initialProgress?.index ?? 0]?.id);
+  const { value: copyListLayout = false, setValue: setCopyListLayout } =
+    useLocalStorage<boolean>("copy-spelling-list-layout", false);
   const [wordUpdates, setWordUpdates] = useState<Record<string, Word>>({});
   const [autoSpeak, setAutoSpeak] = useState(initialAutoSpeak);
   const [autoAdvance, setAutoAdvance] = useState(initialAutoAdvance);
@@ -582,10 +586,33 @@ function ActivePracticeSession({
       timingLock.current = false;
     }
   };
-  const [showEnglish, setShowEnglish] = useState(
+  const [sessionEnglish, setSessionEnglish] = useState(
     () => preferences().languageMode !== "zh-only",
   );
-  const toggleEnglish = () => setShowEnglish((value) => !value);
+  const {
+    value: savedCopyEnglish,
+    setValue: setCopyEnglish,
+    isLoading: englishLoading,
+  } = useLocalStorage<boolean>(
+    `copy-spelling-english-visible-v2-${preferences().languageMode ?? "zh-first"}`,
+    preferences().languageMode !== "zh-only",
+  );
+  const showEnglish =
+    queue[0]?.mode === "copy"
+      ? (savedCopyEnglish ?? preferences().languageMode !== "zh-only")
+      : sessionEnglish;
+  const toggleEnglish = async () => {
+    if (queue[0]?.mode !== "copy") {
+      setSessionEnglish((value) => !value);
+      return;
+    }
+    if (englishLoading) return;
+    try {
+      await setCopyEnglish(!showEnglish);
+    } catch (error) {
+      await report(error);
+    }
+  };
   const togglingAdvance = useRef(false);
   const toggleAutoAdvance = async () => {
     if (togglingAdvance.current) return;
@@ -845,6 +872,21 @@ function ActivePracticeSession({
       : q.mode === "gender"
         ? `\n\n${spellingDiff(`${answer === "m" ? "un" : "une"} ${speechWord(q.word)}`, `${q.sense.gender === "m" ? "un" : "une"} ${speechWord(q.word)}`)}`
         : "";
+  const listLayout = copy && copyListLayout;
+  const showErrorDetail =
+    listLayout && revealed && !checkAnswer(answer, q.expected).correct;
+  const layoutAction = copy ? (
+    <Action
+      title={copyListLayout ? "Use Detail Layout" : "Use List Layout"}
+      onAction={async () => {
+        try {
+          await setCopyListLayout(!copyListLayout);
+        } catch (error) {
+          await report(error);
+        }
+      }}
+    />
+  ) : null;
   const actions = (
     <ActionPanel>
       {!revealed && isInput && (
@@ -1050,6 +1092,7 @@ function ActivePracticeSession({
           />
         </ActionPanel.Section>
       )}
+      {layoutAction}
       <Action
         title="End Session"
         shortcut={{ modifiers: ["cmd", "shift"], key: "e" }}
@@ -1061,7 +1104,7 @@ function ActivePracticeSession({
     <List
       isLoading={busy}
       filtering={false}
-      isShowingDetail
+      isShowingDetail={!listLayout || showErrorDetail}
       searchText={answer}
       onSearchTextChange={(v) => {
         if (!revealed && isInput && !working.current && !ending.current) {
@@ -1082,63 +1125,93 @@ function ActivePracticeSession({
       navigationTitle={`${{ copy: "Copy Spelling", spelling: "Recall Spelling", meaning: "Recall Meaning", gender: "Noun Gender" }[q.mode]} · ${index + 1} / ${queue.length}`}
       actions={actions}
     >
-      {queue.slice(window.start, window.end).map((item, offset) => {
-        const i = window.start + offset;
-        const word = wordUpdates[item.word.id] ?? item.word;
-        const familiarity =
-          word.familiarity === "known"
-            ? "Know"
-            : word.familiarity === "fuzzy" || word.familiarity === "unknown"
-              ? "Fuzzy"
-              : "Unmarked";
-        const familiarityIcon = statusIcon({ ...word, practice: false });
-        return (
-          <List.Item
-            key={item.id}
-            id={item.id}
-            title={q.mode !== "spelling" ? item.word.word : `${i + 1}`}
-            accessories={
-              manageWords && copy && familiarityIcon
-                ? [
-                    {
-                      icon: { source: familiarityIcon },
-                      tooltip: `Familiarity: ${familiarity}`,
-                    },
-                  ]
-                : undefined
-            }
-            icon={
-              i < index
-                ? Icon.CheckCircle
-                : i === index
-                  ? Icon.ArrowRight
-                  : Icon.Circle
-            }
-            detail={
-              <List.Item.Detail
-                markdown={i === index ? prompt + feedback : ""}
-              />
-            }
-            actions={
-              i === index ? (
-                actions
-              ) : (
-                <ActionPanel>
-                  <Action
-                    title="Return to Current Question"
-                    onAction={() => setSelected(q.id)}
+      {queue
+        .slice(window.start, window.end)
+        .flatMap((item, offset) =>
+          (listLayout ? item.word.senses : [item.sense]).map(
+            (sense, senseIndex) => ({
+              item,
+              offset,
+              sense,
+              rowId:
+                senseIndex === 0
+                  ? item.id
+                  : JSON.stringify([item.id, sense.id]),
+            }),
+          ),
+        )
+        .map(({ item, offset, sense, rowId }) => {
+          const i = window.start + offset;
+          const word = wordUpdates[item.word.id] ?? item.word;
+          const familiarity =
+            word.familiarity === "known"
+              ? "Know"
+              : word.familiarity === "fuzzy" || word.familiarity === "unknown"
+                ? "Fuzzy"
+                : "Unmarked";
+          const familiarityIcon = statusIcon({
+            ...word,
+            practice: listLayout ? word.practice : false,
+          });
+          return (
+            <List.Item
+              key={rowId}
+              id={rowId}
+              title={q.mode !== "spelling" ? word.word : `${i + 1}`}
+              subtitle={
+                listLayout
+                  ? [sense.pos, ...translationValues(sense, language)]
+                      .filter(Boolean)
+                      .join(" · ")
+                      .replace(/\s+/g, " ")
+                      .trim()
+                  : undefined
+              }
+              accessories={
+                copy && (manageWords || listLayout) && familiarityIcon
+                  ? [
+                      {
+                        icon: { source: familiarityIcon },
+                        tooltip: `Familiarity: ${familiarity}`,
+                      },
+                    ]
+                  : undefined
+              }
+              icon={
+                i < index
+                  ? Icon.CheckCircle
+                  : i === index
+                    ? Icon.ArrowRight
+                    : Icon.Circle
+              }
+              detail={
+                !listLayout || showErrorDetail ? (
+                  <List.Item.Detail
+                    markdown={i === index ? prompt + feedback : ""}
                   />
-                  <Action
-                    title="End Session"
-                    shortcut={{ modifiers: ["cmd", "shift"], key: "e" }}
-                    onAction={finish}
-                  />
-                </ActionPanel>
-              )
-            }
-          />
-        );
-      })}
+                ) : undefined
+              }
+              actions={
+                i === index ? (
+                  actions
+                ) : (
+                  <ActionPanel>
+                    <Action
+                      title="Return to Current Question"
+                      onAction={() => setSelected(q.id)}
+                    />
+                    {layoutAction}
+                    <Action
+                      title="End Session"
+                      shortcut={{ modifiers: ["cmd", "shift"], key: "e" }}
+                      onAction={finish}
+                    />
+                  </ActionPanel>
+                )
+              }
+            />
+          );
+        })}
     </List>
   );
 }

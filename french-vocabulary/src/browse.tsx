@@ -8,6 +8,7 @@ import {
   List,
   useNavigation,
 } from "@raycast/api";
+import { useLocalStorage } from "@raycast/utils";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isNoun, Word, setPractice } from "./core/model";
 import {
@@ -17,6 +18,7 @@ import {
   recentMistakes,
   detailMarkdown,
   sessionTranslationLanguage,
+  translationValues,
 } from "./core/presentation";
 import { autoBackup, preferences, report, store, useLibrary } from "./runtime";
 import { speakWord, stopSpeech } from "./speech";
@@ -41,19 +43,51 @@ export default function Browse() {
 export function VocabularyList({ archived = false }: { archived?: boolean }) {
   const { lib, loading, refresh } = useLibrary(),
     { push, pop } = useNavigation();
+  const {
+    value: listLayout = false,
+    setValue: setListLayout,
+    isLoading: layoutLoading,
+  } = useLocalStorage<boolean>("browse-list-layout", false);
+  const layoutAction = (
+    <Action
+      title={listLayout ? "Use Detail Layout" : "Use List Layout"}
+      onAction={async () => {
+        try {
+          await setListLayout(!listLayout);
+        } catch (error) {
+          await report(error);
+        }
+      }}
+    />
+  );
   const [query, setQuery] = useState(""),
     [filter, setFilter] = useState(defaults),
     [sort, setSort] = useState("activity"),
     [marked, setMarked] = useState<string[]>([]),
     [selection, setSelection] = useState<string>(),
+    [selectedRow, setSelectedRow] = useState<string>(),
     [showIPA, setShowIPA] = useState(false),
     [shuffle, setShuffle] = useState(0),
     [visibleCount, setVisibleCount] = useState(80),
     [recentErrors, setRecentErrors] = useState(false);
-  const [showEnglish, setShowEnglish] = useState(
-    () => preferences().languageMode !== "zh-only",
+  const baseLanguage = preferences().languageMode;
+  const {
+    value: savedEnglish,
+    setValue: setShowEnglish,
+    isLoading: englishLoading,
+  } = useLocalStorage<boolean>(
+    `browse-english-visible-v2-${baseLanguage ?? "zh-first"}`,
+    baseLanguage !== "zh-only",
   );
-  const toggleEnglish = () => setShowEnglish((value) => !value);
+  const showEnglish = savedEnglish ?? baseLanguage !== "zh-only";
+  const toggleEnglish = async () => {
+    if (englishLoading) return;
+    try {
+      await setShowEnglish(!showEnglish);
+    } catch (error) {
+      await report(error);
+    }
+  };
   const [session, setSession] = useState<ProcessingSession>();
   const [processing, setProcessing] = useState(false);
   const [sessionLoading, setSessionLoading] = useState(true);
@@ -220,7 +254,28 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
   const activeId = words.some((w) => w.id === selection)
     ? selection
     : words[0]?.id;
-  const visibleWords = words.slice(0, visibleCount);
+  const rows = useMemo(
+    () =>
+      words.flatMap((w) =>
+        listLayout
+          ? w.senses.map((sense) => ({
+              id: JSON.stringify([w.id, sense.id]),
+              word: w,
+              sense,
+            }))
+          : [{ id: w.id, word: w, sense: w.senses[0] }],
+      ),
+    [words, listLayout],
+  );
+  const rowById = useMemo(
+    () => new Map(rows.map((row) => [row.id, row])),
+    [rows],
+  );
+  const activeRowId =
+    selectedRow && rowById.get(selectedRow)?.word.id === activeId
+      ? selectedRow
+      : rows.find((row) => row.word.id === activeId)?.id;
+  const visibleRows = rows.slice(0, visibleCount);
   useEffect(() => {
     setVisibleCount(80);
   }, [query, filter, sort, recentErrors]);
@@ -340,7 +395,9 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
     const source = statusIcon(w),
       pos = preferences().listPOS;
     return [
-      ...(pos === "right" ? [{ text: w.senses[0]?.pos ?? "" }] : []),
+      ...(!listLayout && pos === "right"
+        ? [{ text: w.senses[0]?.pos ?? "" }]
+        : []),
       ...(source
         ? [
             {
@@ -362,19 +419,20 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
   };
   return (
     <List
-      isLoading={loading || sessionLoading}
-      isShowingDetail
+      isLoading={loading || sessionLoading || layoutLoading}
+      isShowingDetail={!listLayout}
       pagination={{
         pageSize: 80,
-        hasMore: visibleCount < words.length,
+        hasMore: visibleCount < rows.length,
         onLoadMore: () => setVisibleCount((n) => n + 80),
       }}
       filtering={false}
       searchText={query}
       onSearchTextChange={setQuery}
-      selectedItemId={activeId}
+      selectedItemId={activeRowId}
       onSelectionChange={(id) => {
-        setSelection(id ?? undefined);
+        setSelectedRow(id ?? undefined);
+        setSelection(id ? rowById.get(id)?.word.id : undefined);
         stopSpeech();
       }}
       navigationTitle={
@@ -406,6 +464,7 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
       actions={
         <ActionPanel>
           {processingActions}
+          {layoutAction}
           <Action
             title="Import Vocabulary"
             onAction={() => push(<ImportVocabulary onImported={safeRefresh} />)}
@@ -431,13 +490,27 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
       <List.Section
         title={`${words.length}${marked.length ? ` · ${marked.length} selected` : ""}`}
       >
-        {visibleWords.map((w) => (
+        {visibleRows.map(({ id: rowId, word: w, sense }) => (
           <List.Item
-            key={w.id}
-            id={w.id}
+            key={rowId}
+            id={rowId}
             title={w.word}
             subtitle={
-              preferences().listPOS === "below" ? w.senses[0]?.pos : undefined
+              listLayout
+                ? [
+                    sense.pos,
+                    ...translationValues(
+                      sense,
+                      sessionTranslationLanguage(baseLanguage, showEnglish),
+                    ),
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")
+                    .replace(/\s+/g, " ")
+                    .trim()
+                : preferences().listPOS === "below"
+                  ? w.senses[0]?.pos
+                  : undefined
             }
             icon={
               markedSet.has(w.id)
@@ -446,7 +519,7 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
             }
             accessories={accessories(w)}
             detail={
-              w.id === activeId ? (
+              !listLayout && w.id === activeId ? (
                 <List.Item.Detail
                   markdown={detailMarkdown(
                     w,
@@ -460,7 +533,7 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
               ) : undefined
             }
             actions={
-              w.id === activeId ? (
+              rowId === activeRowId ? (
                 <ActionPanel>
                   <Action
                     title="Speak"
@@ -505,6 +578,7 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
                     />
                   )}
                   {processingActions}
+                  {layoutAction}
                   {marked.length > 0 && (
                     <Action
                       title={`Add ${marked.length} Selected Words to Practice`}
