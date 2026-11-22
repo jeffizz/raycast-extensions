@@ -72,17 +72,35 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
       }}
     />
   );
-  const [collectionId, setCollectionId] = useState("");
+  const storageScope = archived ? "archived" : "active";
+  const {
+    value: collectionId = "",
+    setValue: saveCollection,
+    isLoading: collectionLoading,
+  } = useLocalStorage<string>(`browse-collection-${storageScope}`, "");
+  const setCollectionId = (id: string) => {
+    void saveCollection(id).catch(report);
+  };
+  const {
+    value: filter = defaults,
+    setValue: saveFilter,
+    isLoading: filterLoading,
+  } = useLocalStorage<Filters>(`browse-filters-${storageScope}`, defaults);
+  const setFilter = (value: Filters) => {
+    void saveFilter(value).catch(report);
+  };
+  const [searchWithinFilters, setSearchWithinFilters] = useState(false);
+
   const selectedCollection = collections(lib).find(
     (c) => c.id === collectionId,
   );
   useEffect(() => {
-    if (!loading && collectionId && !selectedCollection) {
+    if (!loading && !collectionLoading && collectionId && !selectedCollection) {
       setCollectionId("");
       setProcessing(false);
       setMarked([]);
     }
-  }, [loading, collectionId, selectedCollection]);
+  }, [loading, collectionLoading, collectionId, selectedCollection]);
   const collectionActions = () => (
     <ActionPanel.Section title="Collections">
       <Action
@@ -159,7 +177,6 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
   const batchLock = useRef(false);
   const [batchBusy, setBatchBusy] = useState(false);
   const [query, setQuery] = useState(""),
-    [filter, setFilter] = useState(defaults),
     [marked, setMarked] = useState<string[]>([]),
     [selection, setSelection] = useState<string>(),
     [selectedRow, setSelectedRow] = useState<string>(),
@@ -181,6 +198,33 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
       : "activity";
   const recentErrors = browseOrder === "recent-errors";
   const sort = recentErrors ? "activity" : browseOrder;
+  const globalSearch = !!query.trim() && !searchWithinFilters;
+  const searchActions = (
+    <ActionPanel.Section title="Search & Filters">
+      <Action
+        title={
+          searchWithinFilters
+            ? "Search All Words"
+            : "Search Within Current Filters"
+        }
+        onAction={() => setSearchWithinFilters((value) => !value)}
+      />
+      <Action
+        title="Reset Filters"
+        onAction={async () => {
+          try {
+            await saveFilter(defaults);
+            await saveCollection("");
+            setProcessing(false);
+            setMarked([]);
+            setRangeStart(undefined);
+          } catch (error) {
+            await report(error);
+          }
+        }}
+      />
+    </ActionPanel.Section>
+  );
   const baseLanguage = preferences().languageMode;
   const {
     value: savedEnglish,
@@ -268,11 +312,12 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
     await refresh();
   }, [refresh]);
   const words = useMemo(() => {
-    const members = collectionId
-      ? new Set(
-          collections(lib).find((c) => c.id === collectionId)?.wordIds ?? [],
-        )
-      : undefined;
+    const members =
+      !globalSearch && collectionId
+        ? new Set(
+            collections(lib).find((c) => c.id === collectionId)?.wordIds ?? [],
+          )
+        : undefined;
     const remaining =
       processing && session
         ? new Set(processingWords(lib, session, archived).map((w) => w.id))
@@ -287,24 +332,25 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
           w.archived === archived &&
           (!members || members.has(w.id)) &&
           (!remaining || remaining.has(w.id)) &&
-          (!recentErrors || recent.has(w.id)) &&
-          matchesWordFilters(w, filter.pos, filter.familiarity) &&
-          (filter.practice === "all" ||
-            w.practice === (filter.practice === "included")) &&
+          (globalSearch || !recentErrors || recent.has(w.id)) &&
+          (globalSearch ||
+            (matchesWordFilters(w, filter.pos, filter.familiarity) &&
+              (filter.practice === "all" ||
+                w.practice === (filter.practice === "included")))) &&
           matchesSearch(w, query),
       ),
       lib,
       sort,
       random.current,
     );
-    if (sort === "activity" && !recentErrors) {
+    if (sort === "activity" && (!recentErrors || globalSearch)) {
       const ranks = new Map(activityOrder.current?.ids.map((id, i) => [id, i]));
       result.sort(
         (a, b) => (ranks.get(a.id) ?? Infinity) - (ranks.get(b.id) ?? Infinity),
       );
     }
     const ranks = new Map(recentIds.map((id, index) => [id, index]));
-    return recentErrors
+    return recentErrors && !globalSearch
       ? result.sort((a, b) => ranks.get(a.id)! - ranks.get(b.id)!)
       : result;
   }, [
@@ -318,6 +364,7 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
     processing,
     session,
     collectionId,
+    globalSearch,
   ]);
   const batch = async (
     kind: "add" | "remove" | "archive" | "fuzzy" | "known" | "unmarked",
@@ -396,7 +443,11 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
   const visibleRows = rows.slice(0, visibleCount);
   useEffect(() => {
     setVisibleCount(80);
-  }, [query, filter, sort, recentErrors, collectionId]);
+  }, [query, filter, sort, recentErrors, collectionId, globalSearch]);
+  useEffect(() => {
+    setMarked([]);
+    setRangeStart(undefined);
+  }, [query, searchWithinFilters, filter, collectionId]);
   const markDone = async () => {
     if (!session || !activeId || sessionLock.current) return;
     sessionLock.current = true;
@@ -543,7 +594,13 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
   return (
     <List
       isLoading={
-        loading || sessionLoading || layoutLoading || batchBusy || orderLoading
+        loading ||
+        sessionLoading ||
+        layoutLoading ||
+        batchBusy ||
+        orderLoading ||
+        filterLoading ||
+        collectionLoading
       }
       isShowingDetail={!listLayout}
       pagination={{
@@ -567,7 +624,17 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
             ? "Archived Vocabulary"
             : "French Vocabulary"
       }
-      searchBarPlaceholder={"Search vocabulary…"}
+      searchBarPlaceholder={
+        processing
+          ? searchWithinFilters
+            ? "Search remaining words within filters…"
+            : "Search all remaining words…"
+          : searchWithinFilters
+            ? "Search within current filters…"
+            : archived
+              ? "Search all archived words…"
+              : "Search all active words…"
+      }
       searchBarAccessory={
         <List.Dropdown
           tooltip="Browse Order / Recent Mistakes"
@@ -595,6 +662,7 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
           {processingActions}
           {layoutAction}
           {collectionActions()}
+          {searchActions}
           <Action
             title="Import Vocabulary"
             onAction={() => push(<ImportVocabulary onImported={safeRefresh} />)}
@@ -632,7 +700,7 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
         }
       />
       <List.Section
-        title={`${selectedCollection ? selectedCollection.name + " · " : ""}${words.length}${marked.length ? ` · ${marked.length} selected` : ""}`}
+        title={`${globalSearch ? (processing ? "Remaining Words" : "All Words") + " · " : selectedCollection ? selectedCollection.name + " · " : ""}${words.length}${marked.length ? ` · ${marked.length} selected` : ""}`}
       >
         {visibleRows.map(({ id: rowId, word: w, sense }) => (
           <List.Item
@@ -714,7 +782,7 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
                             queue={queue}
                             manageWords
                             library={lib}
-                            collectionId={collectionId}
+                            collectionId={globalSearch ? "" : collectionId}
                             autoSpeak={modeSettings(lib, "copy").autoSpeak}
                             onFinished={safeRefresh}
                           />,
@@ -725,6 +793,7 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
                   {processingActions}
                   {layoutAction}
                   {collectionActions()}
+                  {searchActions}
                   {marked.length > 0 && (
                     <Action
                       title={`Add ${marked.length} Selected Words to Practice`}
