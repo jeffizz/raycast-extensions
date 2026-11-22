@@ -13,7 +13,7 @@ export function sessionTranslationLanguage(
 }
 // Keep literal delimiters out of Raycast's LaTeX preprocessor.
 export const md = (s: string) =>
-  s.replace(/[\\\x60*_{}\[\]<>#|$]/g, (char) =>
+  s.replace(/[\\\x60*_{}[\]<>#|$]/g, (char) =>
     char === "\\" || char === "[" || char === "]" || char === "$"
       ? `&#${char.codePointAt(0)};`
       : "\\" + char,

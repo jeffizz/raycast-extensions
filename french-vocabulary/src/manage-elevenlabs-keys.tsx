@@ -11,6 +11,7 @@ import {
   showToast,
   Toast,
   useNavigation,
+  Keyboard,
 } from "@raycast/api";
 import { randomUUID } from "crypto";
 import { updateKeys } from "./tts/state";
@@ -211,7 +212,7 @@ export default function Command() {
     <Action.Push
       title="Add Key"
       icon={Icon.Plus}
-      shortcut={{ modifiers: ["cmd"], key: "n" }}
+      shortcut={Keyboard.Shortcut.Common.New}
       target={<KeyForm reload={reload} />}
     />
   );
@@ -257,7 +258,7 @@ export default function Command() {
                 markdown={
                   "Usage is counted locally for this extension only, not official credits or remaining quota. Submitted characters include failed attempts; cache hits do not count. Reactivation resets current-cycle counters and errors, not lifetime totals. Authentication errors or exhausted credits mark a key Invalid; it is skipped until reactivated.\n\nHTTP 402 does not necessarily mean exhausted credits: inspect the provider code/message below for voice, plan or payment restrictions. Match the model and voice used by the successful playground request, then use Reactivate Now (⌘R).\n\n" +
                   (key.lastError
-                    ? `### Last API error\n\n${key.lastError.replace(/[\\`*_{}\[\]<>#|]/g, "\\$&")}`
+                    ? `### Last API error\n\n${key.lastError.replace(/[\\`*_{}[\]<>#|]/g, "\\$&")}`
                     : "No API error recorded.")
                 }
                 metadata={
@@ -322,7 +323,7 @@ export default function Command() {
                 <Action
                   title="Reactivate Now"
                   icon={Icon.ArrowClockwise}
-                  shortcut={{ modifiers: ["cmd"], key: "r" }}
+                  shortcut={Keyboard.Shortcut.Common.Refresh}
                   onAction={() =>
                     modify((item) => {
                       reactivateKey(item);

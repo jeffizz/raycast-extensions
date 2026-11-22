@@ -7,6 +7,7 @@ import {
   showToast,
   Toast,
   useNavigation,
+  Keyboard,
 } from "@raycast/api";
 import { useState } from "react";
 import {
@@ -33,7 +34,7 @@ import { autoBackup, preferences, report, store, useLibrary } from "../runtime";
 import { speakTexts, speakWord, stopSpeech } from "../speech";
 import { enrichWord } from "../lexicon";
 
-export const escapeMD = (s: string) => s.replace(/[\\`*_{}\[\]<>#|]/g, "\\$&");
+export const escapeMD = (s: string) => s.replace(/[\\`*_{}[\]<>#|]/g, "\\$&");
 export function wordMarkdown(w: Word, _lib?: Library, showIPA = false) {
   return detailMarkdown(w, showIPA, preferences().languageMode);
 }
@@ -69,13 +70,13 @@ export function WordActions({
       <Action
         title="Find Similar Words"
         icon={Icon.MagnifyingGlass}
-        shortcut={{ modifiers: ["cmd"], key: "s" }}
+        shortcut={Keyboard.Shortcut.Common.Save}
         onAction={() => push(<SimilarWords wordId={w.id} />)}
       />
       <Action
         title="Edit Word and Notes"
         icon={Icon.Pencil}
-        shortcut={{ modifiers: ["cmd"], key: "e" }}
+        shortcut={Keyboard.Shortcut.Common.Edit}
         onAction={() => push(<WordEditor word={w} onSaved={refresh} />)}
       />
       <Action
@@ -149,7 +150,7 @@ export function WordActions({
         }}
       />
       <Action.OpenInBrowser
-        title="Look Up in Frdic"
+        title="Look up in Frdic"
         url={`eudic-fr://dict/${encodeURIComponent(speechWord(w))}`}
         shortcut={{ modifiers: ["cmd"], key: "d" }}
       />

@@ -115,7 +115,7 @@ export function detectColumns(text: string): Parsed {
             x,
           ),
         ),
-        ipa: ratio((x) => /^\s*[/\[].+[/\]]/u.test(x)),
+        ipa: ratio((x) => /^\s*[/[].+[/\]]/u.test(x)),
       };
     });
     for (const field of ["zh", "pos", "ipa"] as const) {

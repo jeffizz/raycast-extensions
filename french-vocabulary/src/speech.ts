@@ -112,9 +112,8 @@ export async function speakTexts(texts: string[]) {
     child.on("error", reject);
     child.on("close", (code) => {
       if (playback === child) playback = undefined;
-      token !== generation || code === 0
-        ? resolve()
-        : reject(Error("Audio playback failed."));
+      if (token !== generation || code === 0) resolve();
+      else reject(Error("Audio playback failed."));
     });
   });
 }

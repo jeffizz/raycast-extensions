@@ -54,13 +54,13 @@ export function sqlite(
     p.stdin.on("error", () => {});
     p.on("close", (code) => {
       clearTimeout(timer);
-      code === 0
-        ? resolve(Buffer.concat(output).toString("utf8").trim())
-        : reject(
-            Error(
-              `SQLite: ${Buffer.concat(errors).toString("utf8").trim() || "operation failed"}`,
-            ),
-          );
+      if (code === 0) resolve(Buffer.concat(output).toString("utf8").trim());
+      else
+        reject(
+          Error(
+            `SQLite: ${Buffer.concat(errors).toString("utf8").trim() || "operation failed"}`,
+          ),
+        );
     });
     p.stdin.end(`.timeout 10000\nPRAGMA foreign_keys=ON;\n${query}\n`);
   });

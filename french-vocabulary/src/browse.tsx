@@ -7,6 +7,7 @@ import {
   Icon,
   List,
   useNavigation,
+  Keyboard,
 } from "@raycast/api";
 import { useLocalStorage } from "@raycast/utils";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -629,7 +630,7 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
                         />
                         <Action
                           title="Clear Selection"
-                          shortcut={{ modifiers: ["cmd", "shift"], key: "c" }}
+                          shortcut={Keyboard.Shortcut.Common.Copy}
                           onAction={() => setMarked([])}
                         />
                       </>
@@ -676,7 +677,7 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
                   />
                   <Action
                     title="Refresh"
-                    shortcut={{ modifiers: ["cmd"], key: "r" }}
+                    shortcut={Keyboard.Shortcut.Common.Refresh}
                     onAction={safeRefresh}
                   />
                 </ActionPanel>

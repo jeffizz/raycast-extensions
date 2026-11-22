@@ -12,6 +12,7 @@ import {
   showToast,
   Toast,
   useNavigation,
+  Keyboard,
 } from "@raycast/api";
 import { useEffect, useState } from "react";
 import { readFile, writeFile, rm, stat } from "node:fs/promises";
@@ -238,7 +239,7 @@ export default function Dashboard() {
       />
       <Action
         title="Refresh"
-        shortcut={{ modifiers: ["cmd"], key: "r" }}
+        shortcut={Keyboard.Shortcut.Common.Refresh}
         onAction={reload}
       />
     </>
@@ -440,7 +441,7 @@ function RemoteBackupStatus() {
     <ActionPanel>
       <Action
         title="Refresh Remote Status"
-        shortcut={{ modifiers: ["cmd"], key: "r" }}
+        shortcut={Keyboard.Shortcut.Common.Refresh}
         onAction={refresh}
       />
     </ActionPanel>

@@ -36,7 +36,8 @@ export const curlFetch: typeof fetch = async (input, init = {}) => {
         if (settled) return;
         settled = true;
         init.signal?.removeEventListener("abort", abort);
-        e ? reject(e) : resolve();
+        if (e) reject(e);
+        else resolve();
       };
       const abort = () => {
         child.kill();

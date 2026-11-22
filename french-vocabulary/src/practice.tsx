@@ -863,7 +863,7 @@ function ActivePracticeSession({
         !checkAnswer(answer, q.expected).correct,
       )
     : q.mode === "gender"
-      ? `# ${escapeMD(q.word.word)}\n\n${translations(displaySense, language)}\n\n⌘1 **un**　⌘2 **une**`
+      ? `# ${escapeMD(q.word.word)}\n\n${translations(displaySense, language)}\n\n⌘1 **un**  ⌘2 **une**`
       : `# ${escapeMD(q.word.word)}`;
   const feedback = !revealed
     ? ""
@@ -978,7 +978,7 @@ function ActivePracticeSession({
               title={
                 checkAnswer(answer, q.expected).correct
                   ? "Continue"
-                  : "Continue after Mistake"
+                  : "Continue After Mistake"
               }
               onAction={() =>
                 submit(checkAnswer(answer, q.expected).correct ? 3 : 1)
@@ -999,7 +999,7 @@ function ActivePracticeSession({
         }
       />
       <Action.OpenInBrowser
-        title="Look Up in Frdic"
+        title="Look up in Frdic"
         shortcut={{ modifiers: ["cmd"], key: "d" }}
         url={`eudic-fr://dict/${encodeURIComponent(speechWord(q.word))}`}
       />
@@ -1021,7 +1021,7 @@ function ActivePracticeSession({
         <Action
           title={
             speakAfterSubmit
-              ? "Auto Pronunciation (On Word Entry)"
+              ? "Auto Pronunciation (on Word Entry)"
               : "Auto Pronunciation (After Submit)"
           }
           onAction={toggleSpeechTiming}
@@ -1037,8 +1037,8 @@ function ActivePracticeSession({
         <Action
           title={
             advanceAfterCorrect
-              ? "Disable Advance after Correct Submit"
-              : "Enable Advance after Correct Submit"
+              ? "Disable Advance After Correct Submit"
+              : "Enable Advance After Correct Submit"
           }
           onAction={toggleCorrectAdvance}
         />
