@@ -11,13 +11,18 @@ import {
 } from "@raycast/api";
 import { useEffect, useRef, useState } from "react";
 import { Grade } from "ts-fsrs";
+import {
+  practiceLayoutKey,
+  practiceListRow,
+  supportsDelayedPronunciation,
+} from "./core/practice-view";
 import { PracticeSource } from "./components/practice-source";
 import { ManageCollections } from "./components/collections";
 import {
   collectionSelectionLabel,
   collectionWordIds,
 } from "./core/collections";
-import { useLocalStorage } from "@raycast/utils";
+import { useLocalStorage, usePromise } from "@raycast/utils";
 import { dailySummary, limitDailyQueue } from "./core/daily-limits";
 import { DailyLimits } from "./components/daily-limits";
 import { compactCopyQueue, practiceWindow } from "./core/copy-session";
@@ -29,6 +34,8 @@ import {
   RecallOrder,
   orderRecallQuestions,
   recordAnswer,
+  recallIntervalPreview,
+  formatReviewDelay,
   shouldAutoSubmit,
   practiceSpeechTexts,
 } from "./core/learning";
@@ -39,7 +46,6 @@ import { escapeMD } from "./components/word";
 import { statusIcon } from "./components/status";
 import {
   translations,
-  translationValues,
   sessionTranslationLanguage,
   spellingMarkdown,
   spellingDiff,
@@ -527,8 +533,8 @@ function ActivePracticeSession({
       initialProgress?.results ?? [],
     ),
     [selected, setSelected] = useState(queue[initialProgress?.index ?? 0]?.id);
-  const { value: copyListLayout = false, setValue: setCopyListLayout } =
-    useLocalStorage<boolean>("copy-spelling-list-layout", false);
+  const { value: savedListLayout = false, setValue: setListLayout } =
+    useLocalStorage<boolean>(practiceLayoutKey(queue[0].mode), false);
   const [wordUpdates, setWordUpdates] = useState<Record<string, Word>>({});
   const [autoSpeak, setAutoSpeak] = useState(initialAutoSpeak);
   const [autoAdvance, setAutoAdvance] = useState(initialAutoAdvance);
@@ -669,6 +675,21 @@ function ActivePracticeSession({
     current && wordUpdates[current.word.id]
       ? { ...current, word: wordUpdates[current.word.id] }
       : current;
+  const { data: intervalPreview } = usePromise(
+    async (id: string) => {
+      const entry = await store.getPracticeCard(id);
+      return {
+        id,
+        text: recallIntervalPreview(entry?.card)
+          .map(
+            (option) => `${option.label} ${formatReviewDelay(option.delayMs)}`,
+          )
+          .join(" · "),
+      };
+    },
+    [current?.id ?? ""],
+    { execute: !!current && current.mode === "meaning" && revealed },
+  );
   const done = index >= queue.length,
     copy = q?.mode === "copy";
   const updateCurrentWord = async (
@@ -708,7 +729,11 @@ function ActivePracticeSession({
   useEffect(() => {
     stopSpeech();
     if (q && autoSpeak) {
-      if (speakAfterSubmit && (q.mode === "copy" || q.mode === "spelling")) {
+      if (
+        speakAfterSubmit &&
+        supportsDelayedPronunciation(q.mode) &&
+        !(q.mode === "meaning" && revealed)
+      ) {
         prepareSpeech(practiceSpeechTexts(q, true));
       } else {
         void speakTexts(practiceSpeechTexts(q, revealed)).catch(report);
@@ -856,15 +881,19 @@ function ActivePracticeSession({
       : q.mode === "gender"
         ? `\n\n${spellingDiff(`${answer === "m" ? "un" : "une"} ${speechWord(q.word)}`, `${q.sense.gender === "m" ? "un" : "une"} ${speechWord(q.word)}`)}`
         : "";
-  const listLayout = copy && copyListLayout;
+  const supportsListLayout = supportsDelayedPronunciation(q.mode);
+  const listLayout = supportsListLayout && savedListLayout;
   const showErrorDetail =
-    listLayout && revealed && !checkAnswer(answer, q.expected).correct;
-  const layoutAction = copy ? (
+    listLayout &&
+    isInput &&
+    revealed &&
+    !checkAnswer(answer, q.expected).correct;
+  const layoutAction = supportsListLayout ? (
     <Action
-      title={copyListLayout ? "Use Detail Layout" : "Use List Layout"}
+      title={savedListLayout ? "Use Detail Layout" : "Use List Layout"}
       onAction={async () => {
         try {
-          await setCopyListLayout(!copyListLayout);
+          await setListLayout(!savedListLayout);
         } catch (error) {
           await report(error);
         }
@@ -903,8 +932,17 @@ function ActivePracticeSession({
           title="Reveal Meaning"
           icon={Icon.Eye}
           onAction={() => {
+            if (working.current || ending.current) return;
             setRevealed(true);
             void persistProgress(index, answer, true).catch(report);
+            if (
+              autoSpeak &&
+              speakAfterSubmit &&
+              !spokenSubmissions.current.has(q.id)
+            ) {
+              spokenSubmissions.current.add(q.id);
+              void speakTexts(practiceSpeechTexts(q, true)).catch(report);
+            }
           }}
         />
       )}
@@ -933,30 +971,7 @@ function ActivePracticeSession({
         </>
       )}
       {revealed &&
-        (q.mode === "meaning" ? (
-          <>
-            <Action
-              title="Again"
-              shortcut={{ modifiers: ["cmd"], key: "1" }}
-              onAction={() => submit(1)}
-            />
-            <Action
-              title="Hard"
-              shortcut={{ modifiers: ["cmd"], key: "2" }}
-              onAction={() => submit(2)}
-            />
-            <Action
-              title="Good"
-              shortcut={{ modifiers: ["cmd"], key: "3" }}
-              onAction={() => submit(3)}
-            />
-            <Action
-              title="Easy"
-              shortcut={{ modifiers: ["cmd"], key: "4" }}
-              onAction={() => submit(4)}
-            />
-          </>
-        ) : (
+        (q.mode === "meaning" ? null : (
           <>
             <Action
               title={
@@ -1001,12 +1016,14 @@ function ActivePracticeSession({
           onAction={toggleEnglish}
         />
       )}
-      {isInput && autoSpeak && (
+      {supportsDelayedPronunciation(q.mode) && autoSpeak && (
         <Action
           title={
             speakAfterSubmit
               ? "Auto Pronunciation (on Word Entry)"
-              : "Auto Pronunciation (After Submit)"
+              : q.mode === "meaning"
+                ? "Auto Pronunciation (After Reveal)"
+                : "Auto Pronunciation (After Submit)"
           }
           onAction={toggleSpeechTiming}
         />
@@ -1077,6 +1094,30 @@ function ActivePracticeSession({
         </ActionPanel.Section>
       )}
       {layoutAction}
+      {revealed && q.mode === "meaning" && (
+        <ActionPanel.Section title="Rate Recall">
+          <Action
+            title="Again"
+            shortcut={{ modifiers: ["cmd"], key: "1" }}
+            onAction={() => submit(1)}
+          />
+          <Action
+            title="Hard"
+            shortcut={{ modifiers: ["cmd"], key: "2" }}
+            onAction={() => submit(2)}
+          />
+          <Action
+            title="Good"
+            shortcut={{ modifiers: ["cmd"], key: "3" }}
+            onAction={() => submit(3)}
+          />
+          <Action
+            title="Easy"
+            shortcut={{ modifiers: ["cmd"], key: "4" }}
+            onAction={() => submit(4)}
+          />
+        </ActionPanel.Section>
+      )}
       <Action
         title="End Session"
         shortcut={{ modifiers: ["cmd", "shift"], key: "e" }}
@@ -1101,7 +1142,15 @@ function ActivePracticeSession({
             void submit(3, v);
         }
       }}
-      searchBarPlaceholder={isInput ? "Type spelling…" : ""}
+      searchBarPlaceholder={
+        isInput
+          ? "Type spelling…"
+          : q.mode === "meaning" && revealed
+            ? intervalPreview?.id === q.id
+              ? intervalPreview.text
+              : "Calculating review intervals…"
+            : ""
+      }
       selectedItemId={selected}
       onSelectionChange={(id) => {
         if (id) setSelected(id);
@@ -1133,6 +1182,15 @@ function ActivePracticeSession({
               : word.familiarity === "fuzzy" || word.familiarity === "unknown"
                 ? "Fuzzy"
                 : "Unmarked";
+          const row = practiceListRow(
+            word,
+            sense,
+            q.mode,
+            i,
+            index,
+            revealed,
+            language,
+          );
           const familiarityIcon = statusIcon({
             ...word,
             practice: listLayout ? word.practice : false,
@@ -1141,18 +1199,16 @@ function ActivePracticeSession({
             <List.Item
               key={rowId}
               id={rowId}
-              title={q.mode !== "spelling" ? word.word : `${i + 1}`}
-              subtitle={
+              title={
                 listLayout
-                  ? [sense.pos, ...translationValues(sense, language)]
-                      .filter(Boolean)
-                      .join(" · ")
-                      .replace(/\s+/g, " ")
-                      .trim()
-                  : undefined
+                  ? row.title
+                  : q.mode !== "spelling"
+                    ? word.word
+                    : `${i + 1}`
               }
+              subtitle={listLayout ? row.subtitle : undefined}
               accessories={
-                copy && (manageWords || listLayout) && familiarityIcon
+                (listLayout || (copy && manageWords)) && familiarityIcon
                   ? [
                       {
                         icon: { source: familiarityIcon },

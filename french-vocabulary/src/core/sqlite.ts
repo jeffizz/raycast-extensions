@@ -288,6 +288,18 @@ export class Store {
       throw e;
     }
   }
+  async getPracticeCard(
+    id: string,
+  ): Promise<Library["cards"][number] | undefined> {
+    await this.init();
+    const raw = await sqlite(
+      this.path,
+      `SELECT data FROM cards WHERE id=${sql(id)};`,
+      true,
+      "list",
+    );
+    return raw ? JSON.parse(raw) : undefined;
+  }
   async getMeta<T>(key: string): Promise<T | undefined> {
     await this.init();
     // Metadata is already JSON. Avoid re-encoding a large JSON string in CLI JSON mode.

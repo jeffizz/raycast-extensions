@@ -119,6 +119,32 @@ export function copyQuestionsInOrder(lib: Library, words: Word[]): Question[] {
     return q ? [q] : [];
   });
 }
+export function scheduleRecall(
+  card: Library["cards"][number]["card"] | undefined,
+  at = new Date(),
+) {
+  // Clone serialized cards so previews cannot change persisted memory state.
+  const input = card ? JSON.parse(JSON.stringify(card)) : createEmptyCard(at);
+  return fsrs({ enable_fuzz: false }).repeat(input as CardInput, at);
+}
+export function recallIntervalPreview(
+  card: Library["cards"][number]["card"] | undefined,
+  at = new Date(),
+) {
+  const schedules = scheduleRecall(card, at);
+  return ([1, 2, 3, 4] as const).map((rating) => ({
+    rating,
+    label: { 1: "Again", 2: "Hard", 3: "Good", 4: "Easy" }[rating],
+    due: schedules[rating].card.due.toISOString(),
+    delayMs: schedules[rating].card.due.getTime() - at.getTime(),
+  }));
+}
+export function formatReviewDelay(ms: number) {
+  if (ms < 60_000) return "<1m";
+  if (ms < 3_600_000) return Math.max(1, Math.round(ms / 60_000)) + "m";
+  if (ms < 86_400_000) return Math.max(1, Math.round(ms / 3_600_000)) + "h";
+  return Math.max(1, Math.round(ms / 86_400_000)) + "d";
+}
 export function recordAnswer(
   lib: Library,
   q: Question,
@@ -134,11 +160,7 @@ export function recordAnswer(
   let log: unknown;
   if (q.mode !== "copy") {
     const existing = lib.cards.find((c) => c.id === q.id);
-    const card = existing?.card ?? createEmptyCard(new Date());
-    const result = fsrs({ enable_fuzz: false }).repeat(
-      card as unknown as CardInput,
-      new Date(),
-    )[rating];
+    const result = scheduleRecall(existing?.card, new Date(at))[rating];
     const serialized = JSON.parse(JSON.stringify(result.card));
     log = JSON.parse(JSON.stringify(result.log));
     if (existing) existing.card = serialized;

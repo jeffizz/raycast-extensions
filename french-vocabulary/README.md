@@ -136,6 +136,11 @@ Configure French voice IDs, model and synthesis parameters in extension preferen
 
 ## Practice
 
+Copy Spelling, Recall Meaning and Recall Spelling provide **Use List Layout / Use Detail Layout**, remembered independently per mode. List layout uses one sense per row without duplicating practice questions. Recall Meaning hides translations until Reveal Meaning, then offers Again / Hard / Good / Easy (⌘1–4); grading advances to the next question. Future meanings stay hidden. Recall Spelling displays meanings without showing the French answer until checked; incorrect answers temporarily open the detail comparison and retain the two-Return workflow.
+
+With Auto Pronunciation enabled, Recall Meaning supports **On Word Entry / After Reveal**, while spelling modes support **On Word Entry / After Submit**. Both timings prepare current-word audio on entry, checking the selected provider's local cache before requesting audio. Delayed playback reuses the prepared request and provider/voice selection. Meaning reveal playback does not block grading; advancing cancels obsolete loading/playback. Layout, pronunciation and timing toggles do not create review records; FSRS is updated only by grading or checking an answer.
+
+
 Copy Spelling starts directly when no resumable progress exists. Only unfinished sessions show the chooser with **Resume Session**; **Start New Session** uses the current order and filters and asks before replacing progress. Progress is local-only, stores compact word references, and is saved after checked answers and explicit skips. Old full-word session records are read compatibly. The practice list renders at most 80 nearby rows, not the entire queue. Know words come last while preserving relative order within both groups. Unsubmitted partial input is not saved.
 
 Recall practice uses the original scheduled order. Browse → **Copy Spelling** starts Copy Spelling from all current search/filter results (not just the rendered page), preserving their exact displayed order, including Random and processing-session remaining words. The queue is fixed when started and does not mark processing items done. Archived/globally excluded words and unusable spellings are skipped. Copy pronunciation settings still apply.
