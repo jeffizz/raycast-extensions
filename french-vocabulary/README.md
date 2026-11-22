@@ -19,6 +19,18 @@ npm run dev
 * **Archived Vocabulary** — restore words without losing notes or review history.
 * **Vocabulary Dashboard** — statistics, SQLite WebDAV backup/restore, and library health.
 
+## Collections
+
+Collections are named word lists, separate from Confusion Groups. A word may belong to multiple collections without copying vocabulary or creating new FSRS cards. Rename or delete them through **Browse / Practice → Actions → Manage Collections**. Renaming preserves the collection ID and membership; deletion removes only the collection.
+
+In Import Preview, use the **Import Collection** dropdown to select a collection or choose **Choose or Create Collection…**. The destination is saved with the import-review draft. Successful import adds every imported word head, including exact duplicates, Keep Existing and merged rows. Collection membership and imported changes commit together; conflicts must still be resolved first. Creating a collection explicitly saves an empty collection even if import is later cancelled.
+
+Browse supports **Filters → Collection** and **Actions → Collection**. Existing sorting, both layouts, searching, and Copy Spelling operate within the selected collection. Add/remove the current word or the deduplicated selection using collection Actions. These do not change global practice inclusion or familiarity. Processing progress is separately scoped to each collection; switching collections pauses processing.
+
+**Practice → Actions → Practice Source** opens combined Browse-style filters: Default Library / Selected Words Only, Collection, Part of Speech and Familiarity (All / No Status / Fuzzy / Know). All conditions intersect and are saved independently per mode in library settings and backups. The old Fuzzy Only / Know Only choices are read compatibly. Collection selection is now inside Practice Source rather than a separate Action. Missing/deleted collections match no words until another collection is chosen. Browse and Practice share the same word-level POS/familiarity predicate, including legacy Unknown as Fuzzy.
+
+Due dates, shared per-mode daily limits and global exclusions still apply; archived or practice-excluded words cannot be enabled by source filters. New sessions use the current filters; Resume retains its captured queue and order. Resumable sessions are scoped by collection and skip removed members on reopening. Browse Copy Spelling uses its Browse results instead of saved Practice Source filters. Collections and membership are included in full SQLite backups and logical increments. No database schema migration is needed.
+
 ## Browsing
 
 The dropdown selects **Recently Used** (default), **Import Order**, **Import Order (Reverse)**, **A → Z**, or **Random**. Random order remains stable until Shuffle Again. Recently Used considers edits, review answers, and viewing a word for approximately half a second. Viewing is persisted without making the list jump under the cursor; only reopening the command applies a new activity order. Edits and refreshes update content without moving existing words; newly imported words appear after the captured order.
@@ -50,7 +62,9 @@ Details use compact POS / translation / translation lines, with a divider only b
 | ⌘F | Filters |
 | ⌘R | Refresh |
 
-Batch selection is implemented by the extension using persistent check icons within the current browse session, not Finder-style native range selection.
+Batch selection uses check icons within the current Browse session. In **Actions → Selection**, choose **Set Range Start** on the first word, then **Select Range to Here** on the last word. This replaces the selection with the inclusive range in the current sorted and filtered results, in either direction, including words beyond the rendered page. Multiple sense rows select their shared word only once. If sorting or result membership changes, set the start again; stale ranges are rejected rather than silently selecting different words. Clear Selection also clears the range start. Selection itself does not edit vocabulary.
+
+Selected words support collection membership, practice inclusion/exclusion, archive/restore, confusion groups and **Mark Selection Fuzzy / Mark Selection Know / Clear Selection Familiarity**. Bulk familiarity updates are transactional, do not change FSRS or practice flags, and clear the selection after success. Existing single-word familiarity shortcuts continue to act on the current word.
 
 ## Performance and Unicode fixes
 

@@ -11,6 +11,9 @@ import {
 } from "@raycast/api";
 import { useEffect, useRef, useState } from "react";
 import { Grade } from "ts-fsrs";
+import { PracticeSource } from "./components/practice-source";
+import { ManageCollections } from "./components/collections";
+import { collections, collectionWordIds } from "./core/collections";
 import { useLocalStorage } from "@raycast/utils";
 import { dailySummary, limitDailyQueue } from "./core/daily-limits";
 import { DailyLimits } from "./components/daily-limits";
@@ -38,31 +41,20 @@ import {
   spellingMarkdown,
   spellingDiff,
 } from "./core/presentation";
-import { modeSettings, toggleAutoSpeak } from "./core/practice-settings";
+import {
+  modeSettings,
+  toggleAutoSpeak,
+  practiceSourceFilters,
+} from "./core/practice-settings";
 export default function Practice() {
   return <PracticeMenu />;
 }
 export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
   const { lib, loading, refresh } = useLibrary(),
     { push } = useNavigation();
+  const practiceWordIds = wordIds;
   const [all, setAll] = useState(false);
   const [orders, setOrders] = useState<Partial<Record<Mode, RecallOrder>>>({});
-  const saveSource = async (
-    mode: Mode,
-    scope: "default" | "selected" | "fuzzy" | "known",
-  ) => {
-    try {
-      await store.mutate((l) => {
-        l.settings ??= {};
-        l.settings.practice ??= {};
-        l.settings.practice[mode] = { ...modeSettings(l, mode), scope };
-      });
-      await refresh();
-      void autoBackup();
-    } catch (e) {
-      await report(e);
-    }
-  };
   const modes: {
     mode: Mode;
     title: string;
@@ -116,10 +108,21 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
       }
     >
       <List.Section
-        title={`${lib.words.filter((w) => w.practice && !w.archived && (!wordIds || wordIds.includes(w.id))).length} active words included`}
+        title={`${lib.words.filter((w) => w.practice && !w.archived && (!practiceWordIds || practiceWordIds.includes(w.id))).length} active words included`}
       >
         {modes.map((m) => {
-          const candidates = questions(lib, m.mode, all, wordIds, undefined);
+          const filters = practiceSourceFilters(modeSettings(lib, m.mode));
+          const collectionId = filters.collectionId;
+          const selectedCollection = collections(lib).find(
+            (c) => c.id === collectionId,
+          );
+          const candidates = questions(
+            lib,
+            m.mode,
+            all,
+            practiceWordIds,
+            undefined,
+          );
           const ordered =
             m.mode === "copy"
               ? candidates
@@ -148,7 +151,7 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
               accessories={[{ text: `${queue.length} cards` }]}
               detail={
                 <List.Item.Detail
-                  markdown={`# ${m.title}\n\n${m.description}\n\n${queue.length} cards\n\n**Words:** ${{ default: "Default library", selected: "Selected words only", fuzzy: "Fuzzy words only", known: "Know words only" }[modeSettings(lib, m.mode).scope]}\n\n**Auto pronunciation:** ${modeSettings(lib, m.mode).autoSpeak ? "On" : "Off"}${summary}`}
+                  markdown={`# ${m.title}\n\n${m.description}\n\n${queue.length} cards\n\n**Words:** ${{ default: "Default library", selected: "Selected words only", fuzzy: "Fuzzy words only", known: "Know words only" }[modeSettings(lib, m.mode).scope]}\n\n**Auto pronunciation:** ${modeSettings(lib, m.mode).autoSpeak ? "On" : "Off"}${summary}\n\n**Collection:** ${selectedCollection?.name ?? (collectionId ? "Deleted Collection" : "All Words")}\n\n**Part of speech:** ${filters.pos}\n\n**Familiarity:** ${{ all: "All", unmarked: "No Status", fuzzy: "Fuzzy", known: "Know" }[filters.familiarity]}`}
                 />
               }
               actions={
@@ -171,12 +174,19 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
                           queue={queue}
                           extraPractice={all}
                           library={lib}
+                          collectionId={collectionId}
                           mode={m.mode}
                           autoSpeak={modeSettings(lib, m.mode).autoSpeak}
                           onFinished={refresh}
                         />,
                       );
                     }}
+                  />
+                  <Action
+                    title="Manage Collections"
+                    onAction={() =>
+                      push(<ManageCollections onChanged={refresh} />)
+                    }
                   />
                   {m.mode !== "copy" && (
                     <Action
@@ -219,24 +229,18 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
                       }
                     }}
                   />
-                  <ActionPanel.Submenu title="Practice Source">
-                    <Action
-                      title="Use Default Library"
-                      onAction={() => saveSource(m.mode, "default")}
-                    />
-                    <Action
-                      title="Use Selected Words Only"
-                      onAction={() => saveSource(m.mode, "selected")}
-                    />
-                    <Action
-                      title="Use Fuzzy Words Only"
-                      onAction={() => saveSource(m.mode, "fuzzy")}
-                    />
-                    <Action
-                      title="Use Know Words Only"
-                      onAction={() => saveSource(m.mode, "known")}
-                    />
-                  </ActionPanel.Submenu>
+                  <Action
+                    title="Practice Source"
+                    onAction={() =>
+                      push(
+                        <PracticeSource
+                          library={lib}
+                          mode={m.mode}
+                          refresh={refresh}
+                        />,
+                      )
+                    }
+                  />
                   {m.mode !== "copy" && (
                     <ActionPanel.Submenu
                       title={`Practice Order: ${recallOrders.find((o) => o.value === (orders[m.mode] ?? "scheduled"))!.title}`}
@@ -291,6 +295,7 @@ type CopyProgress = {
   revealed: boolean;
 };
 type SessionProps = {
+  collectionId?: string;
   mode?: Mode;
   extraPractice?: boolean;
   library?: Library;
@@ -302,7 +307,8 @@ type SessionProps = {
 export function PracticeSession(props: SessionProps) {
   const mode = props.mode ?? props.queue[0]?.mode ?? "copy";
   const sessionKey =
-    mode === "copy" ? "copy-spelling-session" : `practice-session-${mode}`;
+    (mode === "copy" ? "copy-spelling-session" : `practice-session-${mode}`) +
+    (props.collectionId ? `-collection-${props.collectionId}` : "");
   const [ready, setReady] = useState(false);
   const [progress, setProgress] = useState<CopyProgress>();
   const [choice, setChoice] = useState<"resume" | "new">();
@@ -356,9 +362,13 @@ export function PracticeSession(props: SessionProps) {
             const item = hydrate(q);
             return item ? [item] : [];
           });
+          const collectionMembers = props.collectionId
+            ? new Set(collectionWordIds(lib, props.collectionId))
+            : undefined;
           const remaining = stored.queue.slice(stored.index).flatMap((q) => {
             const item = hydrate(q);
             return item &&
+              (!collectionMembers || collectionMembers.has(item.word.id)) &&
               !item.word.archived &&
               item.word.practice &&
               (mode === "gender"

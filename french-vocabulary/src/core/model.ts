@@ -60,14 +60,26 @@ export type Review = {
   expected: string;
   log?: unknown;
 };
+export type PracticeSourceFilters = {
+  collectionId: string;
+  pos: "all" | "noun" | "verb" | "adjective" | "adverb";
+  familiarity: "all" | "unmarked" | "fuzzy" | "known";
+};
 export type ModeSettings = {
+  sourceFilters?: PracticeSourceFilters;
   dailyNew?: number;
   dailyReview?: number | null;
   autoSpeak: boolean;
   scope: "default" | "selected" | "fuzzy" | "known";
   wordIds: string[];
 };
+export type VocabularyCollection = {
+  id: string;
+  name: string;
+  wordIds: string[];
+};
 export type LibrarySettings = {
+  collections?: VocabularyCollection[];
   practice?: Partial<Record<Mode, ModeSettings>>;
   backup?: {
     fullHours: number;
@@ -221,6 +233,42 @@ export function validateLibrary(value: unknown): asserts value is Library {
         )
       )
         throw Error("Invalid practice settings.");
+      const filters = setting.sourceFilters;
+      if (
+        filters !== undefined &&
+        (!filters ||
+          typeof filters !== "object" ||
+          typeof filters.collectionId !== "string" ||
+          !["all", "noun", "verb", "adjective", "adverb"].includes(
+            filters.pos,
+          ) ||
+          !["all", "unmarked", "fuzzy", "known"].includes(filters.familiarity))
+      )
+        throw Error("Invalid practice source filters.");
+    }
+    const collectionIds = new Set<string>();
+    const collectionNames = new Set<string>();
+    if (x.settings.collections !== undefined) {
+      if (!Array.isArray(x.settings.collections))
+        throw Error("Invalid collections.");
+      for (const collection of x.settings.collections) {
+        if (
+          !collection ||
+          typeof collection.id !== "string" ||
+          !collection.id ||
+          typeof collection.name !== "string" ||
+          !collection.name.trim() ||
+          collection.name.length > 200 ||
+          collectionIds.has(collection.id) ||
+          collectionNames.has(canonical(collection.name).toLocaleLowerCase()) ||
+          !Array.isArray(collection.wordIds) ||
+          collection.wordIds.some((id: unknown) => typeof id !== "string") ||
+          new Set(collection.wordIds).size !== collection.wordIds.length
+        )
+          throw Error("Invalid collections.");
+        collectionIds.add(collection.id);
+        collectionNames.add(canonical(collection.name).toLocaleLowerCase());
+      }
     }
     const policy = x.settings.backup;
     if (

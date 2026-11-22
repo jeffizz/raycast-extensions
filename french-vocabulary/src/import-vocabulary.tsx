@@ -10,6 +10,8 @@ import {
   useNavigation,
 } from "@raycast/api";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CollectionPicker } from "./components/collections";
+import { addImportedWordsToCollection, collections } from "./core/collections";
 import { createHash } from "node:crypto";
 import {
   applyImport,
@@ -30,6 +32,7 @@ import { wordMarkdown } from "./components/word";
 import { importConflictMarkdown } from "./core/presentation";
 
 type ImportDraft = {
+  collectionId?: string;
   libraryId: string;
   inputHash: string;
   rows: string[][];
@@ -186,7 +189,8 @@ function Preview({
   mapping: Field[];
   onImported?: () => Promise<void>;
 }) {
-  const { lib, loading } = useLibrary(false),
+  const [collectionId, setCollectionId] = useState("");
+  const { lib, loading, refresh } = useLibrary(false),
     { pop, push } = useNavigation(),
     [busy, setBusy] = useState(false);
   const [decisions, setDecisions] = useState<Record<string, ImportDecision>>(
@@ -219,8 +223,17 @@ function Preview({
         rows,
         mapping,
         decisions: restored,
+        collectionId:
+          saved?.libraryId === lib.libraryId && saved.inputHash === inputHash
+            ? saved.collectionId
+            : undefined,
       });
       if (!cancelled) {
+        setCollectionId(
+          saved?.libraryId === lib.libraryId && saved.inputHash === inputHash
+            ? (saved.collectionId ?? "")
+            : "",
+        );
         setDecisions(restored);
         setReady(true);
       }
@@ -303,6 +316,7 @@ function Preview({
         rows,
         mapping,
         decisions: next,
+        collectionId,
       });
       setDecisions(next);
       const remaining = conflicts.filter((c) => !next[c.key]);
@@ -317,6 +331,27 @@ function Preview({
       return false;
     } finally {
       decisionLock.current = false;
+    }
+  };
+  const chooseCollection = async (id: string) => {
+    if (busy || !ready || decisionLock.current)
+      throw Error("Wait for the current import change to finish.");
+    decisionLock.current = true;
+    setBusy(true);
+    try {
+      await store.setMeta(draftKey, {
+        libraryId: lib.libraryId,
+        inputHash,
+        rows,
+        mapping,
+        decisions,
+        collectionId: id,
+      });
+      await refresh();
+      setCollectionId(id);
+    } finally {
+      decisionLock.current = false;
+      setBusy(false);
     }
   };
   const commit = async () => {
@@ -343,6 +378,12 @@ function Preview({
             );
           return decision;
         });
+        if (collectionId)
+          addImportedWordsToCollection(
+            l,
+            collectionId,
+            rows.map((row) => row[mapping.indexOf("word")] ?? ""),
+          );
         for (const w of l.words)
           if (
             !previous.has(w.id) ||
@@ -374,6 +415,40 @@ function Preview({
       onSelectionChange={(id) => setSelected(id ?? undefined)}
       isShowingDetail
       navigationTitle="Import Preview"
+      searchBarAccessory={
+        <List.Dropdown
+          tooltip="Import Collection"
+          value={collectionId}
+          onChange={(value) => {
+            if (
+              value === collectionId ||
+              busy ||
+              !ready ||
+              decisionLock.current
+            )
+              return;
+            if (value === "__choose__") {
+              push(
+                <CollectionPicker
+                  selected={collectionId}
+                  onSelect={chooseCollection}
+                />,
+              );
+            } else {
+              void chooseCollection(value).catch(report);
+            }
+          }}
+        >
+          <List.Dropdown.Item value="" title="No Collection" />
+          {collections(lib).map((c) => (
+            <List.Dropdown.Item key={c.id} value={c.id} title={c.name} />
+          ))}
+          <List.Dropdown.Item
+            value="__choose__"
+            title="Choose or Create Collection…"
+          />
+        </List.Dropdown>
+      }
       actions={
         <ActionPanel>
           <Action title="Confirm Import" icon={Icon.Check} onAction={commit} />

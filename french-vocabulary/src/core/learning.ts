@@ -34,7 +34,7 @@ export function questions(
       !w.archived &&
       w.practice &&
       (!wordIds || wordIds.includes(w.id)) &&
-      modeIncludes(lib, mode, w.id, scope),
+      modeIncludes(lib, mode, w.id, scope, w),
   )) {
     const expected = speechWord(w);
     for (const s of mode === "gender" ? w.senses : w.senses.slice(0, 1)) {

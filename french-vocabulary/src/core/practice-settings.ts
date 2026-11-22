@@ -1,4 +1,12 @@
-import { Library, Mode, ModeSettings } from "./model";
+import { matchesWordFilters } from "./vocabulary-filters";
+import { collections } from "./collections";
+import {
+  Library,
+  Mode,
+  ModeSettings,
+  PracticeSourceFilters,
+  Word,
+} from "./model";
 export const practiceModes: { mode: Mode; title: string }[] = [
   { mode: "copy", title: "Copy Spelling" },
   { mode: "meaning", title: "Recall Meaning" },
@@ -28,20 +36,47 @@ export function addModeWords(lib: Library, ids: string[], targets: string[]) {
     };
   }
 }
+export function practiceSourceFilters(
+  settings: ModeSettings,
+): PracticeSourceFilters {
+  return (
+    settings.sourceFilters ?? {
+      collectionId: "",
+      pos: "all",
+      familiarity:
+        settings.scope === "known"
+          ? "known"
+          : settings.scope === "fuzzy"
+            ? "fuzzy"
+            : "all",
+    }
+  );
+}
 export function modeIncludes(
   lib: Library,
   mode: Mode,
   wordId: string,
   scope?: ModeSettings["scope"],
+  candidate?: Word,
 ) {
   const settings = modeSettings(lib, mode);
   const source = scope ?? settings.scope;
-  if (source === "default") return true;
-  if (source === "selected") return settings.wordIds.includes(wordId);
-  const familiarity = lib.words.find((w) => w.id === wordId)?.familiarity;
-  return source === "known"
-    ? familiarity === "known"
-    : familiarity === "fuzzy" || familiarity === "unknown";
+  const word = candidate ?? lib.words.find((w) => w.id === wordId);
+  if (!word) return false;
+  if (scope !== undefined) {
+    if (scope === "default") return true;
+    if (scope === "selected") return settings.wordIds.includes(wordId);
+    return matchesWordFilters(word, "all", scope);
+  }
+  if (source === "selected" && !settings.wordIds.includes(wordId)) return false;
+  const filters = practiceSourceFilters(settings);
+  if (!matchesWordFilters(word, filters.pos, filters.familiarity)) return false;
+  return (
+    !filters.collectionId ||
+    !!collections(lib)
+      .find((c) => c.id === filters.collectionId)
+      ?.wordIds.includes(wordId)
+  );
 }
 
 export function toggleAutoSpeak(lib: Library, mode: Mode): boolean {
