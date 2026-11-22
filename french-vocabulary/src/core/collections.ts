@@ -53,11 +53,59 @@ export function changeCollectionMembers(
     ? [...new Set([...collection.wordIds, ...selected])]
     : collection.wordIds.filter((id) => !selected.has(id));
 }
+// Preserve legacy single IDs while using stable keys for multi-collection sessions.
+export function collectionSelectionIds(value: string): string[] {
+  if (!value) return [];
+  if (!value.startsWith("[")) return [value];
+  const parsed: unknown = JSON.parse(value);
+  if (!Array.isArray(parsed) || parsed.some((id) => typeof id !== "string"))
+    throw Error("Invalid collection selection.");
+  return [...new Set(parsed as string[])];
+}
+export function collectionSelectionKey(ids: string[]): string {
+  const sorted = [...new Set(ids)].sort();
+  return sorted.length === 1
+    ? sorted[0]
+    : sorted.length
+      ? JSON.stringify(sorted)
+      : "";
+}
+export function collectionSelectionMembers(
+  lib: Library,
+  selection: string,
+): string[] | undefined {
+  const ids = collectionSelectionIds(selection);
+  return ids.length
+    ? [
+        ...new Set(
+          collections(lib)
+            .filter((c) => ids.includes(c.id))
+            .flatMap((c) => c.wordIds),
+        ),
+      ]
+    : undefined;
+}
+export function collectionSelectionLabel(
+  lib: Library,
+  selection: string,
+): string {
+  const ids = collectionSelectionIds(selection);
+  return ids.length
+    ? ids
+        .map(
+          (id) =>
+            collections(lib).find((c) => c.id === id)?.name ??
+            "Deleted Collection",
+        )
+        .join(", ")
+    : "All Words";
+}
 export function collectionWordIds(
   lib: Library,
   id: string,
 ): string[] | undefined {
-  return id ? collectionById(lib, id).wordIds : undefined;
+  if (id && !id.startsWith("[")) return collectionById(lib, id).wordIds;
+  return collectionSelectionMembers(lib, id);
 }
 export function addImportedWordsToCollection(
   lib: Library,

@@ -13,7 +13,10 @@ import { useEffect, useRef, useState } from "react";
 import { Grade } from "ts-fsrs";
 import { PracticeSource } from "./components/practice-source";
 import { ManageCollections } from "./components/collections";
-import { collections, collectionWordIds } from "./core/collections";
+import {
+  collectionSelectionLabel,
+  collectionWordIds,
+} from "./core/collections";
 import { useLocalStorage } from "@raycast/utils";
 import { dailySummary, limitDailyQueue } from "./core/daily-limits";
 import { DailyLimits } from "./components/daily-limits";
@@ -113,9 +116,7 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
         {modes.map((m) => {
           const filters = practiceSourceFilters(modeSettings(lib, m.mode));
           const collectionId = filters.collectionId;
-          const selectedCollection = collections(lib).find(
-            (c) => c.id === collectionId,
-          );
+          const collectionLabel = collectionSelectionLabel(lib, collectionId);
           const candidates = questions(
             lib,
             m.mode,
@@ -151,7 +152,7 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
               accessories={[{ text: `${queue.length} cards` }]}
               detail={
                 <List.Item.Detail
-                  markdown={`# ${m.title}\n\n${m.description}\n\n${queue.length} cards\n\n**Words:** ${{ default: "Default library", selected: "Selected words only", fuzzy: "Fuzzy words only", known: "Know words only" }[modeSettings(lib, m.mode).scope]}\n\n**Auto pronunciation:** ${modeSettings(lib, m.mode).autoSpeak ? "On" : "Off"}${summary}\n\n**Collection:** ${selectedCollection?.name ?? (collectionId ? "Deleted Collection" : "All Words")}\n\n**Part of speech:** ${filters.pos}\n\n**Familiarity:** ${{ all: "All", unmarked: "No Status", fuzzy: "Fuzzy", known: "Know" }[filters.familiarity]}`}
+                  markdown={`# ${m.title}\n\n${m.description}\n\n${queue.length} cards\n\n**Words:** ${{ default: "Default library", selected: "Selected words only", fuzzy: "Fuzzy words only", known: "Know words only" }[modeSettings(lib, m.mode).scope]}\n\n**Auto pronunciation:** ${modeSettings(lib, m.mode).autoSpeak ? "On" : "Off"}${summary}\n\n**Collection:** ${collectionLabel}\n\n**Part of speech:** ${filters.pos}\n\n**Familiarity:** ${{ all: "All", unmarked: "No Status", fuzzy: "Fuzzy", known: "Know" }[filters.familiarity]}`}
                 />
               }
               actions={

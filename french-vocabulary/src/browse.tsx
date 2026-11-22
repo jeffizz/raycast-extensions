@@ -12,7 +12,14 @@ import {
   Toast,
 } from "@raycast/api";
 import { CollectionPicker, ManageCollections } from "./components/collections";
-import { collections, changeCollectionMembers } from "./core/collections";
+import {
+  collections,
+  changeCollectionMembers,
+  collectionSelectionIds,
+  collectionSelectionKey,
+  collectionSelectionMembers,
+  collectionSelectionLabel,
+} from "./core/collections";
 import { useLocalStorage } from "@raycast/utils";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { matchesWordFilters } from "./core/vocabulary-filters";
@@ -95,16 +102,23 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
     (c) => c.id === collectionId,
   );
   useEffect(() => {
-    if (!loading && !collectionLoading && collectionId && !selectedCollection) {
+    if (
+      !loading &&
+      !collectionLoading &&
+      collectionId &&
+      collectionSelectionIds(collectionId).every(
+        (id) => !collections(lib).some((c) => c.id === id),
+      )
+    ) {
       setCollectionId("");
       setProcessing(false);
       setMarked([]);
     }
-  }, [loading, collectionLoading, collectionId, selectedCollection]);
+  }, [loading, collectionLoading, collectionId, lib]);
   const collectionActions = () => (
     <ActionPanel.Section title="Collections">
       <Action
-        title={`Collection: ${selectedCollection?.name ?? "All Words"}`}
+        title={`Collections: ${collectionSelectionLabel(lib, collectionId)}`}
         onAction={() =>
           push(
             <CollectionPicker
@@ -314,9 +328,7 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
   const words = useMemo(() => {
     const members =
       !globalSearch && collectionId
-        ? new Set(
-            collections(lib).find((c) => c.id === collectionId)?.wordIds ?? [],
-          )
+        ? new Set(collectionSelectionMembers(lib, collectionId) ?? [])
         : undefined;
     const remaining =
       processing && session
@@ -520,7 +532,10 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
                       (w) =>
                         w.archived === archived &&
                         (!collectionId ||
-                          selectedCollection?.wordIds.includes(w.id)),
+                          collectionSelectionMembers(
+                            lib,
+                            collectionId,
+                          )?.includes(w.id)),
                     ),
                   ),
                 );
@@ -700,7 +715,7 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
         }
       />
       <List.Section
-        title={`${globalSearch ? (processing ? "Remaining Words" : "All Words") + " · " : selectedCollection ? selectedCollection.name + " · " : ""}${words.length}${marked.length ? ` · ${marked.length} selected` : ""}`}
+        title={`${globalSearch ? (processing ? "Remaining Words" : "All Words") + " · " : collectionId ? collectionSelectionLabel(lib, collectionId) + " · " : ""}${words.length}${marked.length ? ` · ${marked.length} selected` : ""}`}
       >
         {visibleRows.map(({ id: rowId, word: w, sense }) => (
           <List.Item
@@ -1079,8 +1094,8 @@ function FilterForm({
         <ActionPanel>
           <Action.SubmitForm
             title="Apply Filters"
-            onSubmit={(v: Filters & { collection: string }) => {
-              onCollectionChange(v.collection);
+            onSubmit={(v: Filters & { collection: string[] }) => {
+              onCollectionChange(collectionSelectionKey(v.collection));
               onSave({
                 pos: v.pos,
                 familiarity: v.familiarity,
@@ -1092,16 +1107,16 @@ function FilterForm({
         </ActionPanel>
       }
     >
-      <Form.Dropdown
+      <Form.TagPicker
         id="collection"
-        title="Collection"
-        defaultValue={collectionId}
+        title="Collections"
+        defaultValue={collectionSelectionIds(collectionId)}
+        info="Match any selected collection. Leave empty for all words."
       >
-        <Form.Dropdown.Item value="" title="All Words" />
         {collections(library).map((c) => (
-          <Form.Dropdown.Item key={c.id} value={c.id} title={c.name} />
+          <Form.TagPicker.Item key={c.id} value={c.id} title={c.name} />
         ))}
-      </Form.Dropdown>
+      </Form.TagPicker>
       {(Object.keys(options) as (keyof Filters)[]).map((k) => (
         <Form.Dropdown key={k} id={k} title={k} defaultValue={initial[k]}>
           {options[k].map(([value, title]) => (

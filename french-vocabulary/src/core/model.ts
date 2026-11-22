@@ -61,6 +61,7 @@ export type Review = {
   log?: unknown;
 };
 export type PracticeSourceFilters = {
+  collectionIds?: string[];
   collectionId: string;
   pos: "all" | "noun" | "verb" | "adjective" | "adverb";
   familiarity: "all" | "unmarked" | "fuzzy" | "known";
@@ -239,6 +240,11 @@ export function validateLibrary(value: unknown): asserts value is Library {
         (!filters ||
           typeof filters !== "object" ||
           typeof filters.collectionId !== "string" ||
+          (filters.collectionIds !== undefined &&
+            (!Array.isArray(filters.collectionIds) ||
+              filters.collectionIds.some(
+                (id: unknown) => typeof id !== "string",
+              ))) ||
           !["all", "noun", "verb", "adjective", "adverb"].includes(
             filters.pos,
           ) ||

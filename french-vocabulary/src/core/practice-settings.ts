@@ -1,5 +1,8 @@
 import { matchesWordFilters } from "./vocabulary-filters";
-import { collections } from "./collections";
+import {
+  collectionSelectionKey,
+  collectionSelectionMembers,
+} from "./collections";
 import {
   Library,
   Mode,
@@ -39,18 +42,24 @@ export function addModeWords(lib: Library, ids: string[], targets: string[]) {
 export function practiceSourceFilters(
   settings: ModeSettings,
 ): PracticeSourceFilters {
-  return (
-    settings.sourceFilters ?? {
-      collectionId: "",
-      pos: "all",
-      familiarity:
-        settings.scope === "known"
-          ? "known"
-          : settings.scope === "fuzzy"
-            ? "fuzzy"
-            : "all",
-    }
-  );
+  if (settings.sourceFilters)
+    return {
+      ...settings.sourceFilters,
+      collectionId:
+        settings.sourceFilters.collectionIds !== undefined
+          ? collectionSelectionKey(settings.sourceFilters.collectionIds)
+          : settings.sourceFilters.collectionId,
+    };
+  return {
+    collectionId: "",
+    pos: "all",
+    familiarity:
+      settings.scope === "known"
+        ? "known"
+        : settings.scope === "fuzzy"
+          ? "fuzzy"
+          : "all",
+  };
 }
 export function modeIncludes(
   lib: Library,
@@ -73,9 +82,7 @@ export function modeIncludes(
   if (!matchesWordFilters(word, filters.pos, filters.familiarity)) return false;
   return (
     !filters.collectionId ||
-    !!collections(lib)
-      .find((c) => c.id === filters.collectionId)
-      ?.wordIds.includes(wordId)
+    !!collectionSelectionMembers(lib, filters.collectionId)?.includes(wordId)
   );
 }
 
