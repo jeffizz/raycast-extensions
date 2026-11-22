@@ -11,6 +11,16 @@ import {
 } from "@raycast/api";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Grade } from "ts-fsrs";
+import { ReinforcementQuestion } from "./components/reinforcement-question";
+import {
+  Choice,
+  ReinforcementState,
+  reinforcementState,
+  reinforceAfterRecall,
+  reinforceAfterChoice,
+  reinforcementChoices,
+} from "./core/reinforcement";
+import { modeIncludes } from "./core/practice-settings";
 import {
   practiceLayoutKey,
   optionalMeaningSpelling,
@@ -272,6 +282,7 @@ export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
   );
 }
 type CopyProgress = {
+  reinforcementAttempts?: Record<string, number>;
   libraryId: string;
   queue: Question[];
   index: number;
@@ -538,7 +549,9 @@ function ActivePracticeSession({
     [results, setResults] = useState<SessionResult[]>(
       initialProgress?.results ?? [],
     ),
-    [selected, setSelected] = useState(queue[initialProgress?.index ?? 0]?.id);
+    [selected, setSelected] = useState<string | undefined>(
+      queue[initialProgress?.index ?? 0]?.id,
+    );
   const { value: savedListLayout = false, setValue: setListLayout } =
     useLocalStorage<boolean>(practiceLayoutKey(queue[0].mode), false);
   const [wordUpdates, setWordUpdates] = useState<Record<string, Word>>({});
@@ -639,12 +652,77 @@ function ActivePracticeSession({
       togglingAudio.current = false;
     }
   };
+  const { value: mixChoices = false, setValue: setMixChoices } =
+    useLocalStorage<boolean>("meaning-mix-multiple-choice", false);
+  const reinforcement = useRef<ReinforcementState | undefined>(undefined);
+  const attempts = useRef<Record<string, number>>(
+    initialProgress?.reinforcementAttempts ?? {},
+  );
+  const [challenge, setChallenge] = useState<{
+    word: Word;
+    choices: Choice[];
+  }>();
+  const selectionEpoch = useRef(0);
+  const renderedSelectionEpoch = selectionEpoch.current;
+  const [returnToQuestionPending, setReturnToQuestionPending] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  useEffect(() => {
+    let active = true;
+    void store
+      .getMeta<ReinforcementState>("meaning-reinforcement")
+      .then((state) => {
+        if (active && state?.libraryId === sessionLibraryId)
+          setPendingCount(state.tasks.length);
+      })
+      .catch(report);
+    return () => {
+      active = false;
+    };
+  }, [sessionLibraryId]);
+  const updateReinforcement = async (
+    lib: Library,
+    wordId: string,
+    again: boolean,
+  ) => {
+    const previous = reinforcementState(
+      lib,
+      await store.getMeta<ReinforcementState>("meaning-reinforcement"),
+    );
+    const next = reinforceAfterRecall(previous, wordId, again);
+    await store.setMeta("meaning-reinforcement", next);
+    reinforcement.current = next;
+    setPendingCount(next.tasks.length);
+    if (!mixChoices || next.gap < 3) return;
+    for (const task of next.tasks) {
+      if (task.others.length < 5 || (attempts.current[task.wordId] ?? 0) >= 2)
+        continue;
+      const word = lib.words.find((w) => w.id === task.wordId);
+      if (
+        !word ||
+        word.archived ||
+        !word.practice ||
+        !modeIncludes(lib, "meaning", word.id, undefined, word)
+      )
+        continue;
+      const choices = reinforcementChoices(
+        lib,
+        word,
+        preferences().languageMode === "en-only",
+      );
+      if (choices) {
+        selectionEpoch.current++;
+        setChallenge({ word, choices });
+        break;
+      }
+    }
+  };
   const saved = useRef(new Set<string>(initialProgress?.saved));
   const resultLog = useRef(initialProgress?.results ?? []);
   const ratingLabels = sessionRatingLabels(results, [...saved.current]);
   const progressWrites = useRef<Promise<unknown>>(Promise.resolve());
   const persistProgress = (nextIndex: number, text = "", shown = false) => {
     const snapshot = {
+      reinforcementAttempts: { ...attempts.current },
       queue: compactCopyQueue(queue),
       index: nextIndex,
       saved: [...saved.current],
@@ -735,7 +813,7 @@ function ActivePracticeSession({
   };
   useEffect(() => {
     stopSpeech();
-    if (q && autoSpeak) {
+    if (q && autoSpeak && !challenge) {
       if (
         speakAfterSubmit &&
         supportsDelayedPronunciation(q.mode) &&
@@ -747,7 +825,7 @@ function ActivePracticeSession({
       }
     }
     return () => stopSpeech();
-  }, [current, autoSpeak, speakAfterSubmit]);
+  }, [current, autoSpeak, speakAfterSubmit, challenge]);
   const finish = async () => {
     if (ending.current) return;
     ending.current = true;
@@ -765,6 +843,7 @@ function ActivePracticeSession({
       ending.current = false;
     }
   };
+  const awaitReinforcementLibrary = useRef<Library | undefined>(undefined);
   const submit = async (
     rating: Grade,
     explicitAnswer?: string,
@@ -787,6 +866,8 @@ function ActivePracticeSession({
               "Daily limit reached. Progress is preserved. Continue tomorrow, increase Daily Limits, or start All Included Words (Extra Practice).",
             );
           recordAnswer(l, q, grade, value, correct);
+          if (q.mode === "meaning")
+            awaitReinforcementLibrary.current = structuredClone(l);
         });
         await pending.current;
         void autoBackup();
@@ -796,6 +877,17 @@ function ActivePracticeSession({
           { correct, rating: grade, questionId: q.id },
         ];
         setResults(resultLog.current);
+        if (q.mode === "meaning" && awaitReinforcementLibrary.current) {
+          try {
+            await updateReinforcement(
+              awaitReinforcementLibrary.current,
+              q.word.id,
+              grade === 1,
+            );
+          } catch (error) {
+            await report(error);
+          }
+        }
       }
       await persistProgress(
         advance ? index + 1 : index,
@@ -839,6 +931,37 @@ function ActivePracticeSession({
       }
     }
   };
+  if (challenge)
+    return (
+      <ReinforcementQuestion
+        word={challenge.word.word}
+        correctId={challenge.word.id}
+        onEnd={finish}
+        choices={challenge.choices}
+        onAnswer={async (choice) => {
+          const state = reinforcement.current;
+          if (!state) throw Error("Reinforcement state unavailable.");
+          const next = reinforceAfterChoice(
+            state,
+            challenge.word.id,
+            choice.wordId === challenge.word.id,
+          );
+          await store.setMeta("meaning-reinforcement", next);
+          reinforcement.current = next;
+          attempts.current[challenge.word.id] =
+            (attempts.current[challenge.word.id] ?? 0) + 1;
+          setPendingCount(next.tasks.length);
+          await persistProgress(index, answer, revealed);
+        }}
+        onContinue={() => {
+          stopSpeech();
+          selectionEpoch.current++;
+          setReturnToQuestionPending(!!queue[index]);
+          setSelected(queue[window.start]?.id);
+          setChallenge(undefined);
+        }}
+      />
+    );
   if (done)
     return (
       <List navigationTitle="Practice Complete" isShowingDetail>
@@ -847,7 +970,7 @@ function ActivePracticeSession({
           icon={Icon.CheckCircle}
           detail={
             <List.Item.Detail
-              markdown={`# ✓ ${results.filter((r) => r.correct).length} / ${results.length}`}
+              markdown={`# ✓ ${results.filter((r) => r.correct).length} / ${results.length}\n\nReinforcement Pending: ${pendingCount} words`}
             />
           }
           actions={
@@ -914,8 +1037,18 @@ function ActivePracticeSession({
       }}
     />
   ) : null;
+  const returnToCurrentQuestion = () => {
+    setSelected(q.id);
+    setReturnToQuestionPending(false);
+  };
   const actions = (
     <ActionPanel>
+      {returnToQuestionPending && (
+        <Action
+          title="Return to Current Question"
+          onAction={returnToCurrentQuestion}
+        />
+      )}
       {!revealed && isInput && (
         <Action
           title="Check Spelling"
@@ -1107,6 +1240,22 @@ function ActivePracticeSession({
           />
         </ActionPanel.Section>
       )}
+      {q.mode === "meaning" && (
+        <Action
+          title={
+            mixChoices
+              ? "Disable Multiple Choice Reinforcement"
+              : "Mix in Multiple Choice"
+          }
+          onAction={async () => {
+            try {
+              await setMixChoices(!mixChoices);
+            } catch (error) {
+              await report(error);
+            }
+          }}
+        />
+      )}
       {layoutAction}
       {revealed && q.mode === "meaning" && (
         <ActionPanel.Section title="Rate Recall">
@@ -1163,18 +1312,21 @@ function ActivePracticeSession({
         }
       }}
       searchBarPlaceholder={
-        isInput
-          ? "Type spelling…"
-          : q.mode === "meaning" && revealed
-            ? intervalPreview?.id === q.id
-              ? intervalPreview.text
-              : "Calculating review intervals…"
-            : q.mode === "meaning"
-              ? "Type spelling (optional), or press Return to reveal…"
-              : ""
+        returnToQuestionPending
+          ? "Press Return to locate the current question…"
+          : isInput
+            ? "Type spelling…"
+            : q.mode === "meaning" && revealed
+              ? intervalPreview?.id === q.id
+                ? intervalPreview.text
+                : "Calculating review intervals…"
+              : q.mode === "meaning"
+                ? "Type spelling (optional), or press Return to reveal…"
+                : ""
       }
       selectedItemId={selected}
       onSelectionChange={(id) => {
+        if (renderedSelectionEpoch !== selectionEpoch.current) return;
         if (id) setSelected(id);
       }}
       navigationTitle={`${{ copy: "Copy Spelling", spelling: "Recall Spelling", meaning: "Recall Meaning", gender: "Noun Gender" }[q.mode]} · ${index + 1} / ${queue.length}`}
@@ -1271,7 +1423,7 @@ function ActivePracticeSession({
                     <ActionPanel>
                       <Action
                         title="Return to Current Question"
-                        onAction={() => setSelected(q.id)}
+                        onAction={returnToCurrentQuestion}
                       />
                       {layoutAction}
                       <Action
