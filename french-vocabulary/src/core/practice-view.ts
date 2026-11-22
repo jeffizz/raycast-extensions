@@ -1,7 +1,17 @@
 import type { Mode, Sense, Word } from "./model";
 import type { LanguageMode } from "./presentation";
 import { translationValues } from "./presentation";
+import { checkAnswer } from "./learning";
 
+export function optionalMeaningSpelling(
+  answer: string,
+  expected: string,
+  revealed: boolean,
+) {
+  if (!revealed || !answer.trim() || checkAnswer(answer, expected).correct)
+    return undefined;
+  return { expected, answer };
+}
 export function practiceLayoutKey(mode: Mode) {
   return mode === "copy"
     ? "copy-spelling-list-layout"

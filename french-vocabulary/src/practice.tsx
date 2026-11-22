@@ -9,10 +9,11 @@ import {
   Toast,
   useNavigation,
 } from "@raycast/api";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Grade } from "ts-fsrs";
 import {
   practiceLayoutKey,
+  optionalMeaningSpelling,
   practiceListRow,
   supportsDelayedPronunciation,
 } from "./core/practice-view";
@@ -874,10 +875,14 @@ function ActivePracticeSession({
     : q.mode === "gender"
       ? `# ${escapeMD(q.word.word)}\n\n${translations(displaySense, language)}\n\n⌘1 **un**  ⌘2 **une**`
       : `# ${escapeMD(q.word.word)}`;
+  const meaningSpelling =
+    q.mode === "meaning"
+      ? optionalMeaningSpelling(answer, q.expected, revealed)
+      : undefined;
   const feedback = !revealed
     ? ""
     : q.mode === "meaning"
-      ? `\n\n${meanings}`
+      ? `\n\n${meaningSpelling ? spellingDiff(meaningSpelling.answer, meaningSpelling.expected) + "\n\n" : ""}${meanings}`
       : q.mode === "gender"
         ? `\n\n${spellingDiff(`${answer === "m" ? "un" : "une"} ${speechWord(q.word)}`, `${q.sense.gender === "m" ? "un" : "une"} ${speechWord(q.word)}`)}`
         : "";
@@ -1130,11 +1135,17 @@ function ActivePracticeSession({
       isLoading={busy}
       filtering={false}
       isShowingDetail={!listLayout || showErrorDetail}
-      searchText={answer}
+      searchText={q.mode === "meaning" && revealed ? "" : answer}
       onSearchTextChange={(v) => {
-        if (!revealed && isInput && !working.current && !ending.current) {
+        if (
+          !revealed &&
+          (isInput || q.mode === "meaning") &&
+          !working.current &&
+          !ending.current
+        ) {
           setAnswer(v);
           if (
+            isInput &&
             autoAdvance &&
             !(autoSpeak && speakAfterSubmit) &&
             shouldAutoSubmit(v, q.expected)
@@ -1149,7 +1160,9 @@ function ActivePracticeSession({
             ? intervalPreview?.id === q.id
               ? intervalPreview.text
               : "Calculating review intervals…"
-            : ""
+            : q.mode === "meaning"
+              ? "Type spelling (optional), or press Return to reveal…"
+              : ""
       }
       selectedItemId={selected}
       onSelectionChange={(id) => {
@@ -1196,60 +1209,83 @@ function ActivePracticeSession({
             practice: listLayout ? word.practice : false,
           });
           return (
-            <List.Item
-              key={rowId}
-              id={rowId}
-              title={
-                listLayout
-                  ? row.title
-                  : q.mode !== "spelling"
-                    ? word.word
-                    : `${i + 1}`
-              }
-              subtitle={listLayout ? row.subtitle : undefined}
-              accessories={
-                (listLayout || (copy && manageWords)) && familiarityIcon
-                  ? [
-                      {
-                        icon: { source: familiarityIcon },
-                        tooltip: `Familiarity: ${familiarity}`,
-                      },
-                    ]
-                  : undefined
-              }
-              icon={
-                i < index
-                  ? Icon.CheckCircle
-                  : i === index
-                    ? Icon.ArrowRight
-                    : Icon.Circle
-              }
-              detail={
-                !listLayout || showErrorDetail ? (
-                  <List.Item.Detail
-                    markdown={i === index ? prompt + feedback : ""}
-                  />
-                ) : undefined
-              }
-              actions={
-                i === index ? (
-                  actions
-                ) : (
-                  <ActionPanel>
-                    <Action
-                      title="Return to Current Question"
-                      onAction={() => setSelected(q.id)}
+            <Fragment key={rowId}>
+              <List.Item
+                id={rowId}
+                title={
+                  listLayout
+                    ? row.title
+                    : q.mode !== "spelling"
+                      ? word.word
+                      : `${i + 1}`
+                }
+                subtitle={listLayout ? row.subtitle : undefined}
+                accessories={
+                  (listLayout || (copy && manageWords)) && familiarityIcon
+                    ? [
+                        {
+                          icon: { source: familiarityIcon },
+                          tooltip: `Familiarity: ${familiarity}`,
+                        },
+                      ]
+                    : undefined
+                }
+                icon={
+                  i < index
+                    ? Icon.CheckCircle
+                    : i === index
+                      ? Icon.ArrowRight
+                      : Icon.Circle
+                }
+                detail={
+                  !listLayout || showErrorDetail ? (
+                    <List.Item.Detail
+                      markdown={i === index ? prompt + feedback : ""}
                     />
-                    {layoutAction}
-                    <Action
-                      title="End Session"
-                      shortcut={{ modifiers: ["cmd", "shift"], key: "e" }}
-                      onAction={finish}
+                  ) : undefined
+                }
+                actions={
+                  i === index ? (
+                    actions
+                  ) : (
+                    <ActionPanel>
+                      <Action
+                        title="Return to Current Question"
+                        onAction={() => setSelected(q.id)}
+                      />
+                      {layoutAction}
+                      <Action
+                        title="End Session"
+                        shortcut={{ modifiers: ["cmd", "shift"], key: "e" }}
+                        onAction={finish}
+                      />
+                    </ActionPanel>
+                  )
+                }
+              />
+              {listLayout &&
+                i === index &&
+                meaningSpelling &&
+                sense.id ===
+                  item.word.senses[item.word.senses.length - 1]?.id && (
+                  <>
+                    <List.Item
+                      id={JSON.stringify([q.id, "spelling-correct"])}
+                      title={meaningSpelling.expected}
+                      subtitle="Correct Spelling"
+                      icon={Icon.CheckCircle}
+                      actions={actions}
                     />
-                  </ActionPanel>
-                )
-              }
-            />
+                    <List.Item
+                      id={JSON.stringify([q.id, "spelling-input"])}
+                      title={meaningSpelling.answer}
+                      subtitle="Your Input"
+                      icon={Icon.XMarkCircle}
+                      actions={actions}
+                    />
+                  </>
+                )}
+            </Fragment>
           );
         })}
     </List>
