@@ -37,7 +37,7 @@ export function PracticeSource({
           throw Error(
             "This collection was deleted. Choose All Words or another collection.",
           );
-        await store.mutate((lib) => {
+        await store.updateSettings(library.libraryId, (lib) => {
           if (
             values.collectionIds.some(
               (id) => !collections(lib).some((c) => c.id === id),

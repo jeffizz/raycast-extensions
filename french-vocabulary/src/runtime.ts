@@ -88,19 +88,26 @@ export async function autoBackup() {
     for (const listener of backupListeners) listener();
   }
 }
-export function useLibrary(includeHistory = true) {
+export function useLibrary(includeHistory = true, todayOnly = false) {
   const [lib, setLib] = useState<Library>(emptyLibrary),
     [loading, setLoading] = useState(true);
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      setLib(await store.load(includeHistory));
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      setLib(
+        await store.load(
+          includeHistory,
+          todayOnly ? start.toISOString() : undefined,
+        ),
+      );
     } catch (e) {
       await report(e);
     } finally {
       setLoading(false);
     }
-  }, [includeHistory]);
+  }, [includeHistory, todayOnly]);
   useEffect(() => {
     void refresh().then(() => autoBackup());
   }, [refresh]);

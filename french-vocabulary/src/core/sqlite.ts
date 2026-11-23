@@ -142,7 +142,7 @@ export class Store {
       })();
     return this.ready;
   }
-  async load(includeHistory = true): Promise<Library> {
+  async load(includeHistory = true, reviewsSince?: string): Promise<Library> {
     await this.init();
     const raw = await sqlite(
       this.path,
@@ -150,7 +150,7 @@ export class Store {
       SELECT 'header' AS kind,value AS data FROM meta WHERE key='header'
       UNION ALL SELECT 'words',data FROM (SELECT data FROM words ORDER BY rowid)
       UNION ALL SELECT 'groups',data FROM groups_data
-      ${includeHistory ? "UNION ALL SELECT 'cards',data FROM cards UNION ALL SELECT 'reviews',data FROM reviews" : ""}; COMMIT;`,
+      ${includeHistory ? `UNION ALL SELECT 'cards',data FROM cards UNION ALL SELECT 'reviews',data FROM reviews ${reviewsSince ? `WHERE at >= ${sql(reviewsSince)}` : ""}` : ""}; COMMIT;`,
       true,
     );
     // Plain text rows avoid costly nested JSON aggregation inside the sqlite CLI.
@@ -255,6 +255,36 @@ export class Store {
     const result = await change(lib);
     await this.save(lib, rev, id, false, baseline);
     return result;
+  }
+  async updateSettings(
+    expectedLibraryId: string,
+    change: (lib: Library) => void,
+  ) {
+    const header =
+      await this.getMeta<
+        Pick<Library, "version" | "libraryId" | "revision" | "settings">
+      >("header");
+    if (!header || header.libraryId !== expectedLibraryId)
+      throw Error("Library changed. Reopen settings.");
+    // Settings validation requires no vocabulary, cards, or review history.
+    const candidate: Library = {
+      ...header,
+      words: [],
+      groups: [],
+      cards: [],
+      reviews: [],
+    };
+    change(candidate);
+    validateLibrary(candidate);
+    await sqlite(
+      this.path,
+      `BEGIN IMMEDIATE;
+      CREATE TEMP TABLE settings_guard(ok INTEGER CHECK(ok=1));
+      UPDATE meta SET value=json_set(value,'$.settings',json(${sql(JSON.stringify(candidate.settings ?? {}))}),'$.revision',json_extract(value,'$.revision')+1)
+      WHERE key='header' AND json_extract(value,'$.libraryId')=${sql(header.libraryId)} AND json_extract(value,'$.revision')=${header.revision};
+      INSERT INTO settings_guard VALUES(changes());
+      COMMIT;`,
+    );
   }
   async updateWord(id: string, edit: (w: Word) => void | Promise<void>) {
     await this.init();

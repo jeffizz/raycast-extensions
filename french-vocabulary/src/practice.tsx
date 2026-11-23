@@ -77,7 +77,7 @@ export default function Practice() {
   return <PracticeMenu />;
 }
 export function PracticeMenu({ wordIds }: { wordIds?: string[] }) {
-  const { lib, loading, refresh } = useLibrary(),
+  const { lib, loading, refresh } = useLibrary(true, true),
     { push } = useNavigation();
   const practiceWordIds = wordIds;
   const [all, setAll] = useState(false);
