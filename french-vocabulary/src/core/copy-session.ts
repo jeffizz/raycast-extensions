@@ -1,4 +1,18 @@
 import type { Question } from "./learning";
+import type { Word } from "./model";
+export function nextPracticeIndex(
+  queue: Question[],
+  start: number,
+  updates: Record<string, Word>,
+) {
+  let index = start;
+  while (index < queue.length) {
+    const word = updates[queue[index].word.id] ?? queue[index].word;
+    if (!word.archived && word.practice) break;
+    index++;
+  }
+  return index;
+}
 export function compactCopyQueue(queue: Question[]) {
   return queue.map((q) => ({
     id: q.id,

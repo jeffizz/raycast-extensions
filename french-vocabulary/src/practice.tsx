@@ -38,6 +38,7 @@ import { dailySummary, limitDailyQueue } from "./core/daily-limits";
 import { DailyLimits } from "./components/daily-limits";
 import {
   compactCopyQueue,
+  nextPracticeIndex,
   practiceWindow,
   SessionResult,
   sessionRatingLabels,
@@ -520,7 +521,7 @@ export function PracticeSession(props: SessionProps) {
 function ActivePracticeSession({
   queue,
   autoSpeak: initialAutoSpeak,
-  manageWords = false,
+  manageWords = true,
   initialProgress,
   sessionLibraryId,
   sessionKey,
@@ -549,9 +550,15 @@ function ActivePracticeSession({
     [results, setResults] = useState<SessionResult[]>(
       initialProgress?.results ?? [],
     ),
-    [selected, setSelected] = useState<string | undefined>(
-      queue[initialProgress?.index ?? 0]?.id,
-    );
+    [selected, setSelected] = useState<string>();
+  const initialQuestionId = useRef(initialProgress ? undefined : queue[0]?.id);
+  const initialSelectionPending = useRef(!!initialQuestionId.current);
+  const [initialRowsPending, setInitialRowsPending] = useState(
+    !!initialQuestionId.current,
+  );
+  useEffect(() => {
+    if (initialQuestionId.current) setSelected(initialQuestionId.current);
+  }, []);
   const { value: savedListLayout = false, setValue: setListLayout } =
     useLocalStorage<boolean>(practiceLayoutKey(queue[0].mode), false);
   const [wordUpdates, setWordUpdates] = useState<Record<string, Word>>({});
@@ -654,6 +661,12 @@ function ActivePracticeSession({
   };
   const { value: mixChoices = false, setValue: setMixChoices } =
     useLocalStorage<boolean>("meaning-mix-multiple-choice", false);
+  const {
+    value: updateFamiliarityFromRating = false,
+    setValue: setUpdateFamiliarityFromRating,
+    isLoading: familiaritySettingLoading,
+  } = useLocalStorage<boolean>("meaning-update-familiarity-from-rating", false);
+  const familiarityToggleLock = useRef(false);
   const reinforcement = useRef<ReinforcementState | undefined>(undefined);
   const attempts = useRef<Record<string, number>>(
     initialProgress?.reinforcementAttempts ?? {},
@@ -664,7 +677,8 @@ function ActivePracticeSession({
   }>();
   const selectionEpoch = useRef(0);
   const renderedSelectionEpoch = selectionEpoch.current;
-  const [returnToQuestionPending, setReturnToQuestionPending] = useState(false);
+  const [returnToQuestionPending, setReturnToQuestionPending] =
+    useState(!!initialProgress);
   const [pendingCount, setPendingCount] = useState(0);
   useEffect(() => {
     let active = true;
@@ -795,10 +809,15 @@ function ActivePracticeSession({
         setWordUpdates((previous) => ({ ...previous, [q.word.id]: updated! }));
       if (skip) {
         submissionVersion.current++;
-        await persistProgress(index + 1);
+        const nextIndex = nextPracticeIndex(queue, index + 1, {
+          ...wordUpdates,
+          ...(updated ? { [q.word.id]: updated } : {}),
+        });
+        await persistProgress(nextIndex);
         stopSpeech();
-        setIndex(index + 1);
-        setSelected(queue[index + 1]?.id);
+        setIndex(nextIndex);
+        setSelected(queue[nextIndex]?.id);
+        setReturnToQuestionPending(false);
         setAnswer("");
         setRevealed(false);
       }
@@ -849,7 +868,13 @@ function ActivePracticeSession({
     explicitAnswer?: string,
     advance = true,
   ) => {
-    if (!q || working.current || ending.current) return;
+    if (
+      !q ||
+      working.current ||
+      ending.current ||
+      (q.mode === "meaning" && familiaritySettingLoading)
+    )
+      return;
     working.current = true;
     setBusy(true);
     const version = ++submissionVersion.current;
@@ -860,16 +885,31 @@ function ActivePracticeSession({
     const grade: Grade = q.mode !== "meaning" && !correct ? 1 : rating;
     try {
       if (!saved.current.has(q.id)) {
+        let gradedWord: Word | undefined;
         pending.current = store.mutate((l) => {
           if (!extraPractice && !limitDailyQueue(l, q.mode, [q]).length)
             throw Error(
               "Daily limit reached. Progress is preserved. Continue tomorrow, increase Daily Limits, or start All Included Words (Extra Practice).",
             );
-          recordAnswer(l, q, grade, value, correct);
+          gradedWord = structuredClone(
+            recordAnswer(
+              l,
+              q,
+              grade,
+              value,
+              correct,
+              updateFamiliarityFromRating,
+            ),
+          );
           if (q.mode === "meaning")
             awaitReinforcementLibrary.current = structuredClone(l);
         });
         await pending.current;
+        if (gradedWord)
+          setWordUpdates((previous) => ({
+            ...previous,
+            [q.word.id]: gradedWord!,
+          }));
         void autoBackup();
         saved.current.add(q.id);
         resultLog.current = [
@@ -890,7 +930,7 @@ function ActivePracticeSession({
         }
       }
       await persistProgress(
-        advance ? index + 1 : index,
+        advance ? nextPracticeIndex(queue, index + 1, wordUpdates) : index,
         advance ? "" : value,
         !advance,
       );
@@ -912,12 +952,13 @@ function ActivePracticeSession({
       }
       if (version !== submissionVersion.current || ending.current) return;
       if (!advance) return;
-      setIndex((i) => i + 1);
-      setSelected(queue[index + 1]?.id);
+      const nextIndex = nextPracticeIndex(queue, index + 1, wordUpdates);
+      setIndex(nextIndex);
+      setSelected(queue[nextIndex]?.id);
       setAnswer("");
       setRevealed(false);
       stopSpeech();
-      if (index + 1 === queue.length) {
+      if (nextIndex === queue.length) {
         await autoBackup();
         await onFinished();
       }
@@ -1191,11 +1232,14 @@ function ActivePracticeSession({
           onAction={toggleCorrectAdvance}
         />
       )}
-      {manageWords && copy && (
+      {manageWords && (
         <ActionPanel.Section title="Manage Current Word">
           <Action
             title="Mark Fuzzy"
-            shortcut={{ modifiers: ["cmd"], key: "1" }}
+            shortcut={{
+              modifiers: copy ? ["cmd"] : ["cmd", "shift"],
+              key: "1",
+            }}
             onAction={() =>
               updateCurrentWord((w) => {
                 w.familiarity = "fuzzy";
@@ -1204,7 +1248,10 @@ function ActivePracticeSession({
           />
           <Action
             title="Mark Know"
-            shortcut={{ modifiers: ["cmd"], key: "2" }}
+            shortcut={{
+              modifiers: copy ? ["cmd"] : ["cmd", "shift"],
+              key: "2",
+            }}
             onAction={() =>
               updateCurrentWord((w) => {
                 w.familiarity = "known";
@@ -1213,7 +1260,10 @@ function ActivePracticeSession({
           />
           <Action
             title="Clear Familiarity"
-            shortcut={{ modifiers: ["cmd"], key: "0" }}
+            shortcut={{
+              modifiers: copy ? ["cmd"] : ["cmd", "shift"],
+              key: "0",
+            }}
             onAction={() =>
               updateCurrentWord((w) => {
                 w.familiarity = "unmarked";
@@ -1239,6 +1289,34 @@ function ActivePracticeSession({
             }
           />
         </ActionPanel.Section>
+      )}
+      {q.mode === "meaning" && (
+        <Action
+          title={
+            updateFamiliarityFromRating
+              ? "Disable Update Familiarity from Rating"
+              : "Enable Update Familiarity from Rating"
+          }
+          onAction={async () => {
+            if (
+              working.current ||
+              ending.current ||
+              familiaritySettingLoading ||
+              familiarityToggleLock.current
+            )
+              return;
+            familiarityToggleLock.current = true;
+            try {
+              await setUpdateFamiliarityFromRating(
+                !updateFamiliarityFromRating,
+              );
+            } catch (error) {
+              await report(error);
+            } finally {
+              familiarityToggleLock.current = false;
+            }
+          }}
+        />
       )}
       {q.mode === "meaning" && (
         <Action
@@ -1327,6 +1405,11 @@ function ActivePracticeSession({
       selectedItemId={selected}
       onSelectionChange={(id) => {
         if (renderedSelectionEpoch !== selectionEpoch.current) return;
+        if (initialSelectionPending.current) {
+          if (id !== initialQuestionId.current) return;
+          initialSelectionPending.current = false;
+          setInitialRowsPending(false);
+        }
         if (id) setSelected(id);
       }}
       navigationTitle={`${{ copy: "Copy Spelling", spelling: "Recall Spelling", meaning: "Recall Meaning", gender: "Noun Gender" }[q.mode]} · ${index + 1} / ${queue.length}`}
@@ -1346,6 +1429,10 @@ function ActivePracticeSession({
                   : JSON.stringify([item.id, sense.id]),
             }),
           ),
+        )
+        .filter(
+          ({ rowId }) =>
+            !initialRowsPending || rowId === initialQuestionId.current,
         )
         .map(({ item, offset, sense, rowId }) => {
           const i = window.start + offset;
@@ -1382,6 +1469,9 @@ function ActivePracticeSession({
                 }
                 subtitle={listLayout ? row.subtitle : undefined}
                 accessories={[
+                  ...(word.archived
+                    ? [{ icon: Icon.Tray, tooltip: "Archived" }]
+                    : []),
                   ...(listLayout &&
                   q.mode === "meaning" &&
                   i < index &&
@@ -1393,7 +1483,7 @@ function ActivePracticeSession({
                         },
                       ]
                     : []),
-                  ...((listLayout || (copy && manageWords)) && familiarityIcon
+                  ...(familiarityIcon
                     ? [
                         {
                           icon: { source: familiarityIcon },

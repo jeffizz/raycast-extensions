@@ -151,12 +151,16 @@ export function recordAnswer(
   rating: Grade,
   answer: string,
   correct: boolean,
+  updateMeaningFamiliarity = false,
 ) {
   const w = lib.words.find((w) => w.id === q.word.id);
   if (!w || w.archived || !w.practice)
     throw Error("This word is no longer active in the practice library.");
   const at = now();
   w.updatedAt = at;
+  if (q.mode === "meaning" && updateMeaningFamiliarity) {
+    w.familiarity = rating <= 2 ? "fuzzy" : "known";
+  }
   let log: unknown;
   if (q.mode !== "copy") {
     const existing = lib.cards.find((c) => c.id === q.id);
@@ -185,6 +189,7 @@ export function recordAnswer(
     expected: q.expected,
     log,
   });
+  return w;
 }
 export function shouldAutoSubmit(answer: string, expected: string) {
   return !!answer && answer.normalize("NFC") === expected.normalize("NFC");
