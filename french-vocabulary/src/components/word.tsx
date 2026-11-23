@@ -108,6 +108,7 @@ export function WordActions({
         onAction={() =>
           update((w) => {
             w.familiarity = "fuzzy";
+            delete w.meaningFamiliaritySuccessStreak;
           })
         }
       />
@@ -118,6 +119,7 @@ export function WordActions({
         onAction={() =>
           update((w) => {
             w.familiarity = "known";
+            delete w.meaningFamiliaritySuccessStreak;
           })
         }
       />
@@ -127,6 +129,7 @@ export function WordActions({
         onAction={() =>
           update((w) => {
             w.familiarity = "unmarked";
+            delete w.meaningFamiliaritySuccessStreak;
           })
         }
       />

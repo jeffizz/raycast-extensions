@@ -158,8 +158,23 @@ export function recordAnswer(
     throw Error("This word is no longer active in the practice library.");
   const at = now();
   w.updatedAt = at;
-  if (q.mode === "meaning" && updateMeaningFamiliarity) {
-    w.familiarity = rating <= 2 ? "fuzzy" : "known";
+  if (q.mode === "meaning") {
+    if (!updateMeaningFamiliarity) {
+      delete w.meaningFamiliaritySuccessStreak;
+    } else if (rating <= 2) {
+      w.familiarity = "fuzzy";
+      delete w.meaningFamiliaritySuccessStreak;
+    } else if (w.familiarity === "fuzzy" || w.familiarity === "unknown") {
+      if (w.meaningFamiliaritySuccessStreak === 1) {
+        w.familiarity = "known";
+        delete w.meaningFamiliaritySuccessStreak;
+      } else {
+        w.meaningFamiliaritySuccessStreak = 1;
+      }
+    } else {
+      w.familiarity = "known";
+      delete w.meaningFamiliaritySuccessStreak;
+    }
   }
   let log: unknown;
   if (q.mode !== "copy") {

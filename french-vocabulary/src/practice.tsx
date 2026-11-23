@@ -1251,6 +1251,7 @@ function ActivePracticeSession({
             onAction={() =>
               updateCurrentWord((w) => {
                 w.familiarity = "fuzzy";
+                delete w.meaningFamiliaritySuccessStreak;
               })
             }
           />
@@ -1263,6 +1264,7 @@ function ActivePracticeSession({
             onAction={() =>
               updateCurrentWord((w) => {
                 w.familiarity = "known";
+                delete w.meaningFamiliaritySuccessStreak;
               })
             }
           />
@@ -1275,6 +1277,7 @@ function ActivePracticeSession({
             onAction={() =>
               updateCurrentWord((w) => {
                 w.familiarity = "unmarked";
+                delete w.meaningFamiliaritySuccessStreak;
               })
             }
           />

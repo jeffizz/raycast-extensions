@@ -25,6 +25,7 @@ export type Word = {
   examples: Example[];
   tags: string[];
   familiarity: Familiarity;
+  meaningFamiliaritySuccessStreak?: 0 | 1;
   archived: boolean;
   practice: boolean;
   speech: string;
@@ -311,6 +312,9 @@ export function validateLibrary(value: unknown): asserts value is Library {
       !Array.isArray(w.examples) ||
       !Array.isArray(w.tags) ||
       !["unmarked", "unknown", "fuzzy", "known"].includes(w.familiarity) ||
+      (w.meaningFamiliaritySuccessStreak !== undefined &&
+        w.meaningFamiliaritySuccessStreak !== 0 &&
+        w.meaningFamiliaritySuccessStreak !== 1) ||
       typeof w.archived !== "boolean" ||
       typeof w.practice !== "boolean" ||
       [w.notes, w.speech, w.articleOverride, w.createdAt, w.updatedAt].some(

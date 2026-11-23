@@ -1,13 +1,88 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { emptyLibrary } from "../src/core/model";
+import { emptyLibrary, validateLibrary } from "../src/core/model";
+import { baseline, makeDelta, applyDelta } from "../src/core/delta";
+import { setSelectionFamiliarity } from "../src/core/browse-selection";
 import { applyImport } from "../src/core/importer";
 import { questions, recordAnswer } from "../src/core/learning";
-import { Store } from "../src/core/sqlite";
+import { Store, readSQLiteBackup } from "../src/core/sqlite";
 
+test("Fuzzy promotion requires two consecutive successes and failures reset progress", () => {
+  for (const initial of ["fuzzy", "unknown", "known"] as const) {
+    const lib = sample();
+    const w = lib.words[0];
+    w.familiarity = initial;
+    const q = questions(lib, "meaning", true)[0];
+    if (initial === "known") recordAnswer(lib, q, 2, "", true, true);
+    recordAnswer(lib, q, 3, "", true, true);
+    assert.notEqual(w.familiarity, "known");
+    assert.equal(w.meaningFamiliaritySuccessStreak, 1);
+    recordAnswer(lib, q, 1, "", false, true);
+    assert.equal(w.meaningFamiliaritySuccessStreak ?? 0, 0);
+    recordAnswer(lib, q, 4, "", true, true);
+    assert.equal(w.familiarity === "known", false);
+    recordAnswer(lib, q, 3, "", true, true);
+    assert.equal(w.familiarity, "known");
+    assert.equal(w.meaningFamiliaritySuccessStreak ?? 0, 0);
+  }
+});
+test("disabled link and manual familiarity reset progress; other modes leave it alone", () => {
+  const lib = sample(),
+    w = lib.words[0];
+  w.familiarity = "fuzzy";
+  w.meaningFamiliaritySuccessStreak = 1;
+  recordAnswer(lib, questions(lib, "spelling", true)[0], 3, "ami", true, true);
+  assert.equal(w.meaningFamiliaritySuccessStreak, 1);
+  recordAnswer(lib, questions(lib, "meaning", true)[0], 3, "", true);
+  assert.equal(w.familiarity, "fuzzy");
+  assert.equal(w.meaningFamiliaritySuccessStreak, undefined);
+  w.meaningFamiliaritySuccessStreak = 1;
+  setSelectionFamiliarity(lib, [w.id], "fuzzy");
+  assert.equal(w.meaningFamiliaritySuccessStreak, undefined);
+  validateLibrary(lib);
+  for (const invalid of [-1, 2, null, "1"]) {
+    const broken = JSON.parse(JSON.stringify(lib));
+    broken.words[0].meaningFamiliaritySuccessStreak = invalid;
+    assert.throws(() => validateLibrary(broken), /word/);
+  }
+});
+test("streak survives SQLite snapshot and logical increments without schema changes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "fv-streak-backup-"));
+  try {
+    const db = new Store(root);
+    await db.mutate((lib) => {
+      applyImport(lib, [["ami"]], ["word"]);
+      lib.words[0].familiarity = "fuzzy";
+    });
+    const before = await db.load();
+    await db.mutate((lib) =>
+      recordAnswer(lib, questions(lib, "meaning", true)[0], 3, "", true, true),
+    );
+    const after = await db.load();
+    assert.equal(after.words[0].meaningFamiliaritySuccessStreak, 1);
+    assert.deepEqual(
+      applyDelta(
+        before,
+        JSON.parse(JSON.stringify(makeDelta(baseline(before), after))),
+      ),
+      after,
+    );
+    await db.exportSQLite(join(root, "test.sqlite"));
+    assert.deepEqual(
+      await readSQLiteBackup(await readFile(join(root, "test.sqlite"))),
+      after,
+    );
+    await db.mutate((lib) =>
+      recordAnswer(lib, questions(lib, "meaning", true)[0], 4, "", true, true),
+    );
+    assert.equal((await db.load()).words[0].familiarity, "known");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 function sample() {
   const lib = emptyLibrary();
   applyImport(lib, [["ami", "n.m.", "friend"]], ["word", "pos", "en"]);

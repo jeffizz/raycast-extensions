@@ -39,6 +39,7 @@ export function setSelectionFamiliarity(
   for (const word of lib.words) {
     if (!selected.has(word.id)) continue;
     word.familiarity = familiarity;
+    delete word.meaningFamiliaritySuccessStreak;
     word.updatedAt = at;
   }
 }
