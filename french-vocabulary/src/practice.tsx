@@ -486,6 +486,7 @@ export function PracticeSession(props: SessionProps) {
                     });
                     return;
                   }
+                  setProgress(undefined);
                   setChoice("new");
                 }}
               />
@@ -894,7 +895,11 @@ function ActivePracticeSession({
             ),
           );
           if (q.mode === "meaning")
-            awaitReinforcementLibrary.current = structuredClone(l);
+            awaitReinforcementLibrary.current = {
+              ...l,
+              cards: [],
+              reviews: [],
+            };
         });
         await pending.current;
         if (gradedWord)
@@ -918,6 +923,8 @@ function ActivePracticeSession({
             );
           } catch (error) {
             await report(error);
+          } finally {
+            awaitReinforcementLibrary.current = undefined;
           }
         }
       }

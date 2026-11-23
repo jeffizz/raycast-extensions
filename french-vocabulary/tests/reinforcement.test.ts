@@ -9,6 +9,21 @@ import {
   reinforcementChoices,
 } from "../src/core/reinforcement";
 
+test("long sessions keep reinforcement spacing bounded and compact legacy progress", () => {
+  const lib = emptyLibrary();
+  let state = reinforcementState(lib);
+  for (let i = 0; i < 500; i++)
+    state = reinforceAfterRecall(state, `word-${i}`, true);
+  for (let i = 500; i < 783; i++)
+    state = reinforceAfterRecall(state, `word-${i}`, false);
+  assert.equal(state.tasks.length, 500);
+  assert.ok(state.tasks.every((task) => task.others.length === 5));
+  state.tasks[0].others = Array.from({ length: 783 }, (_, i) => `legacy-${i}`);
+  const compact = reinforcementState(lib, state);
+  assert.equal(compact.tasks[0].others.length, 5);
+  assert.equal(state.tasks[0].others.length, 783);
+});
+
 test("Again waits for five distinct other normal words; wrong choices restart spacing", () => {
   const lib = emptyLibrary();
   let state = reinforceAfterRecall(reinforcementState(lib), "target", true);

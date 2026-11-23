@@ -12,7 +12,13 @@ export function reinforcementState(
   saved?: ReinforcementState,
 ): ReinforcementState {
   return saved?.libraryId === lib.libraryId
-    ? structuredClone(saved)
+    ? {
+        ...saved,
+        tasks: saved.tasks.map((task) => ({
+          ...task,
+          others: task.others.slice(0, 5),
+        })),
+      }
     : { libraryId: lib.libraryId, tasks: [], gap: 3 };
 }
 export function reinforceAfterRecall(
@@ -23,7 +29,11 @@ export function reinforceAfterRecall(
   const next = structuredClone(state);
   next.gap = Math.min(3, next.gap + 1);
   for (const task of next.tasks)
-    if (task.wordId !== wordId && !task.others.includes(wordId))
+    if (
+      task.others.length < 5 &&
+      task.wordId !== wordId &&
+      !task.others.includes(wordId)
+    )
       task.others.push(wordId);
   if (again) {
     next.tasks = next.tasks.filter((t) => t.wordId !== wordId);
