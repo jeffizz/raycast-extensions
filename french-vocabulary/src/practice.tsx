@@ -11,6 +11,7 @@ import {
 } from "@raycast/api";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Grade } from "ts-fsrs";
+import { PracticeConfusion } from "./components/practice-confusion";
 import { ReinforcementQuestion } from "./components/reinforcement-question";
 import {
   Choice,
@@ -766,7 +767,7 @@ function ActivePracticeSession({
   const pending = useRef<Promise<unknown>>(Promise.resolve());
   const ending = useRef(false);
   const working = useRef(false),
-    { pop } = useNavigation();
+    { push, pop } = useNavigation();
   const window = practiceWindow(index, queue.length);
   const submissionVersion = useRef(0);
   const current = queue[index];
@@ -1184,6 +1185,14 @@ function ActivePracticeSession({
         onAction={() =>
           speakTexts(practiceSpeechTexts(q, revealed)).catch(report)
         }
+      />
+      <Action
+        title="Add to Confusion Group"
+        icon={Icon.Link}
+        onAction={() => {
+          stopSpeech();
+          push(<PracticeConfusion current={q.word} />);
+        }}
       />
       <Action.OpenInBrowser
         title="Look up in Frdic"
