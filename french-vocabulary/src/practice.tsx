@@ -603,26 +603,17 @@ function ActivePracticeSession({
       timingLock.current = false;
     }
   };
-  const [sessionEnglish, setSessionEnglish] = useState(
-    () => preferences().languageMode !== "zh-only",
-  );
   const {
     value: savedCopyEnglish,
     setValue: setCopyEnglish,
     isLoading: englishLoading,
   } = useLocalStorage<boolean>(
-    `copy-spelling-english-visible-v2-${preferences().languageMode ?? "zh-first"}`,
+    `${queue[0].mode === "copy" ? "copy-spelling" : `practice-${queue[0].mode}`}-english-visible-v2-${preferences().languageMode ?? "zh-first"}`,
     preferences().languageMode !== "zh-only",
   );
   const showEnglish =
-    queue[0]?.mode === "copy"
-      ? (savedCopyEnglish ?? preferences().languageMode !== "zh-only")
-      : sessionEnglish;
+    savedCopyEnglish ?? preferences().languageMode !== "zh-only";
   const toggleEnglish = async () => {
-    if (queue[0]?.mode !== "copy") {
-      setSessionEnglish((value) => !value);
-      return;
-    }
     if (englishLoading) return;
     try {
       await setCopyEnglish(!showEnglish);
