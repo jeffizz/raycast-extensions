@@ -7,7 +7,7 @@ import {
   Toast,
   useNavigation,
 } from "@raycast/api";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { autoBackup, report, store, useLibrary } from "../runtime";
 import { searchKey, Word } from "../core/model";
 import {
@@ -23,6 +23,11 @@ export function PracticeConfusion({ current }: { current: Word }) {
   const [includeArchived, setIncludeArchived] = useState(false);
   const [destination, setDestination] = useState(false);
   const [groupQuery, setGroupQuery] = useState("");
+  const [groupSelection, setGroupSelection] = useState<string>();
+  const [groupRowsReady, setGroupRowsReady] = useState(false);
+  useEffect(() => {
+    if (destination) setGroupSelection("create-group");
+  }, [destination]);
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const toggle = (id: string) =>
@@ -39,6 +44,8 @@ export function PracticeConfusion({ current }: { current: Word }) {
             return;
           }
           setGroupQuery("");
+          setGroupSelection(undefined);
+          setGroupRowsReady(false);
           setDestination(true);
         }}
       />
@@ -83,8 +90,17 @@ export function PracticeConfusion({ current }: { current: Word }) {
     );
     return (
       <List
+        key="group-destination"
         isLoading={busy || loading}
         filtering={false}
+        selectedItemId={groupSelection}
+        onSelectionChange={(id) => {
+          if (!groupRowsReady) {
+            if (id !== "create-group") return;
+            setGroupRowsReady(true);
+          }
+          if (id) setGroupSelection(id);
+        }}
         navigationTitle="Add to Confusion Group"
         searchText={groupQuery}
         onSearchTextChange={setGroupQuery}
@@ -92,9 +108,8 @@ export function PracticeConfusion({ current }: { current: Word }) {
       >
         <List.Item
           id="create-group"
-          title="Create New Group"
+          title={confusionWordTitle(lib, [current.id, ...selected])}
           icon={Icon.Plus}
-          subtitle={confusionWordTitle(lib, [current.id, ...selected])}
           actions={
             <ActionPanel>
               <Action title="Create Group" onAction={() => saveGroup("")} />
@@ -105,7 +120,7 @@ export function PracticeConfusion({ current }: { current: Word }) {
             </ActionPanel>
           }
         />
-        {groups.map((g) => (
+        {(groupRowsReady ? groups : []).map((g) => (
           <List.Item
             key={g.id}
             id={g.id}
@@ -137,6 +152,7 @@ export function PracticeConfusion({ current }: { current: Word }) {
   );
   return (
     <List
+      key="word-search"
       isLoading={loading}
       filtering={false}
       searchText={query}

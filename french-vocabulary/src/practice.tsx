@@ -59,7 +59,7 @@ import {
 } from "./core/learning";
 import { speechWord, Mode, Word, Library } from "./core/model";
 import { autoBackup, preferences, report, store, useLibrary } from "./runtime";
-import { prepareSpeech, speakTexts, stopSpeech } from "./speech";
+import { prepareSpeech, speakTexts, speakWord, stopSpeech } from "./speech";
 import { escapeMD } from "./components/word";
 import { statusIcon } from "./components/status";
 import {
@@ -985,6 +985,7 @@ function ActivePracticeSession({
             (attempts.current[challenge.word.id] ?? 0) + 1;
           setPendingCount(next.tasks.length);
           await persistProgress(index, answer, revealed);
+          if (autoSpeak) void speakWord(challenge.word).catch(report);
         }}
         onContinue={() => {
           stopSpeech();
