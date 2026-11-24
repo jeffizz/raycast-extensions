@@ -15,7 +15,13 @@ import {
   confusionWordTitle,
 } from "../core/practice-confusion";
 
-export function PracticeConfusion({ current }: { current: Word }) {
+export function PracticeConfusion({
+  current,
+  onSaved,
+}: {
+  current: Word;
+  onSaved?: () => Promise<void>;
+}) {
   const { lib, loading } = useLibrary(false);
   const { pop } = useNavigation();
   const [query, setQuery] = useState("");
@@ -71,6 +77,7 @@ export function PracticeConfusion({ current }: { current: Word }) {
         title: "Confusion Group Saved",
         message: name,
       });
+      await onSaved?.();
       pop();
     } catch (error) {
       await report(error);

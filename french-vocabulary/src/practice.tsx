@@ -11,7 +11,7 @@ import {
 } from "@raycast/api";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Grade } from "ts-fsrs";
-import { PracticeConfusion } from "./components/practice-confusion";
+import { RelatedConfusionGroups } from "./components/related-confusion-groups";
 import { ReinforcementQuestion } from "./components/reinforcement-question";
 import {
   Choice,
@@ -1186,11 +1186,11 @@ function ActivePracticeSession({
         }
       />
       <Action
-        title="Add to Confusion Group"
-        icon={Icon.Link}
+        title="Confusion Groups"
+        icon={Icon.List}
         onAction={() => {
           stopSpeech();
-          push(<PracticeConfusion current={q.word} />);
+          push(<RelatedConfusionGroups wordId={q.word.id} />);
         }}
       />
       <Action.OpenInBrowser

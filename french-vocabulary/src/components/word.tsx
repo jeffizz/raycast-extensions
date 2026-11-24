@@ -33,6 +33,7 @@ import {
 import { autoBackup, preferences, report, store, useLibrary } from "../runtime";
 import { speakTexts, speakWord, stopSpeech } from "../speech";
 import { enrichWord } from "../lexicon";
+import { RelatedConfusionGroups } from "./related-confusion-groups";
 
 export const escapeMD = (s: string) => s.replace(/[\\`*_{}[\]<>#|]/g, "\\$&");
 export function wordMarkdown(w: Word, _lib?: Library, showIPA = false) {
@@ -134,10 +135,13 @@ export function WordActions({
         }
       />
       <Action
-        title="Add to Confusion Group"
-        icon={Icon.TwoPeople}
+        title="Confusion Groups"
         shortcut={{ modifiers: ["cmd"], key: "g" }}
-        onAction={() => push(<AddToGroup ids={[w.id]} />)}
+        icon={Icon.List}
+        onAction={() => {
+          stopSpeech();
+          push(<RelatedConfusionGroups wordId={w.id} />);
+        }}
       />
       <Action
         title="Enrich Noun Data from Lexik"
