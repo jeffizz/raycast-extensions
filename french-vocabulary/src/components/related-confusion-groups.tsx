@@ -1,13 +1,6 @@
-import {
-  Action,
-  ActionPanel,
-  Detail,
-  Icon,
-  List,
-  useNavigation,
-} from "@raycast/api";
-import { preferences, useLibrary } from "../runtime";
-import { comparison } from "../core/presentation";
+import { Action, ActionPanel, Icon, List, useNavigation } from "@raycast/api";
+import { useLibrary } from "../runtime";
+import { GroupDetails } from "./group-details";
 import { PracticeConfusion } from "./practice-confusion";
 
 export function RelatedConfusionGroups({ wordId }: { wordId: string }) {
@@ -52,9 +45,7 @@ export function RelatedConfusionGroups({ wordId }: { wordId: string }) {
               <Action
                 title="Open Group Details"
                 icon={Icon.List}
-                onAction={() =>
-                  push(<RelatedGroupDetails groupId={group.id} />)
-                }
+                onAction={() => push(<GroupDetails groupId={group.id} />)}
               />
               {addAction}
               <Action title="Refresh" onAction={refresh} />
@@ -63,29 +54,5 @@ export function RelatedConfusionGroups({ wordId }: { wordId: string }) {
         />
       ))}
     </List>
-  );
-}
-
-function RelatedGroupDetails({ groupId }: { groupId: string }) {
-  const { lib, loading, refresh } = useLibrary(false);
-  const group = lib.groups.find((g) => g.id === groupId);
-  const members = new Set(group?.wordIds);
-  const words = lib.words.filter((w) => members.has(w.id));
-  return (
-    <Detail
-      isLoading={loading}
-      navigationTitle={group?.name ?? "Confusion Group"}
-      markdown={
-        group
-          ? comparison(words, preferences().languageMode) +
-            (group.notes ? "\n\n" + group.notes : "")
-          : "This confusion group no longer exists."
-      }
-      actions={
-        <ActionPanel>
-          <Action title="Refresh" onAction={refresh} />
-        </ActionPanel>
-      }
-    />
   );
 }

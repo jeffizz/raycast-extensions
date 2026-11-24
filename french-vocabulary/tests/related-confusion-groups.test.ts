@@ -17,7 +17,7 @@ test("related group views exclude review history and only show groups containing
   assert.ok(source.includes("useLibrary(false)"));
   assert.ok(source.includes("g.wordIds.includes(wordId)"));
   assert.ok(source.includes('title="Open Group Details"'));
-  assert.ok(source.includes("group.notes"));
+  assert.ok(source.includes("<GroupDetails groupId={group.id} />"));
   assert.ok(source.includes('title="Add to Confusion Group"'));
   assert.ok(source.includes("onSaved={refresh}"));
   assert.equal((source.match(/\{addAction\}/g) ?? []).length, 2);

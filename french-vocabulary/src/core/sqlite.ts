@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { reorderedGroupName } from "./group-order";
 import {
   mkdir,
   chmod,
@@ -255,6 +256,57 @@ export class Store {
     const result = await change(lib);
     await this.save(lib, rev, id, false, baseline);
     return result;
+  }
+  async reorderGroup(
+    libraryId: string,
+    groupId: string,
+    before: string[],
+    after: string[],
+  ) {
+    if (
+      new Set(after).size !== after.length ||
+      before.length !== after.length ||
+      before.some((id) => !after.includes(id))
+    )
+      throw Error("Group order must preserve all members.");
+    await this.init();
+    const raw = await sqlite(
+      this.path,
+      `SELECT data FROM groups_data WHERE id=${sql(groupId)};`,
+      true,
+      "list",
+    );
+    if (!raw) throw Error("Group changed. Refresh and retry.");
+    const group = JSON.parse(raw) as Library["groups"][number];
+    const rows: { id: string; word: string }[] = JSON.parse(
+      (await sqlite(
+        this.path,
+        `SELECT id,word FROM words WHERE id IN (SELECT value FROM json_each(${sql(JSON.stringify(before))}));`,
+        true,
+      )) || "[]",
+    );
+    const name = reorderedGroupName(
+      group.name,
+      before,
+      after,
+      new Map(rows.map((w) => [w.id, w.word])),
+    );
+    try {
+      await sqlite(
+        this.path,
+        `BEGIN IMMEDIATE;
+        UPDATE groups_data SET data=json_set(data,'$.wordIds',json(${sql(JSON.stringify(after))}),'$.name',${sql(name)},'$.updatedAt',${sql(now())})
+        WHERE id=${sql(groupId)} AND data=${sql(raw)} AND json_extract(data,'$.wordIds')=json(${sql(JSON.stringify(before))})
+        AND EXISTS(SELECT 1 FROM meta WHERE key='header' AND json_extract(value,'$.libraryId')=${sql(libraryId)});
+        CREATE TEMP TABLE group_guard(ok INTEGER CHECK(ok=1)); INSERT INTO group_guard VALUES(changes());
+        UPDATE meta SET value=json_set(value,'$.revision',json_extract(value,'$.revision')+1) WHERE key='header';
+        COMMIT;`,
+      );
+    } catch (error) {
+      if (String(error).includes("CHECK constraint"))
+        throw Error("Group changed. Refresh and retry.");
+      throw error;
+    }
   }
   async updateSettings(
     expectedLibraryId: string,

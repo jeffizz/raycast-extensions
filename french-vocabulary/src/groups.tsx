@@ -4,7 +4,6 @@ import {
   confirmAlert,
   Alert,
   Icon,
-  Detail,
   List,
   useNavigation,
 } from "@raycast/api";
@@ -13,8 +12,9 @@ import { autoBackup, preferences, report, store, useLibrary } from "./runtime";
 import { GroupEditor } from "./components/word";
 import { comparison } from "./core/presentation";
 import { PracticeMenu } from "./practice";
+import { GroupDetails } from "./components/group-details";
 export default function Groups() {
-  const { lib, loading, refresh } = useLibrary(),
+  const { lib, loading, refresh } = useLibrary(false),
     { push, pop } = useNavigation();
   const [selection, setSelection] = useState<string>();
   return (
@@ -68,7 +68,7 @@ export default function Groups() {
               <Action
                 title="Browse Group Members"
                 icon={Icon.List}
-                onAction={() => push(<GroupMembers groupId={g.id} />)}
+                onAction={() => push(<GroupDetails groupId={g.id} />)}
               />
               <Action
                 title="Edit Group and Comparison Notes"
@@ -137,25 +137,5 @@ export default function Groups() {
         />
       ))}
     </List>
-  );
-}
-function GroupMembers({ groupId }: { groupId: string }) {
-  const { lib, loading, refresh } = useLibrary();
-  const g = lib.groups.find((g) => g.id === groupId);
-  const words = (g?.wordIds ?? []).flatMap((id) => {
-    const word = lib.words.find((w) => w.id === id);
-    return word ? [word] : [];
-  });
-  return (
-    <Detail
-      isLoading={loading}
-      navigationTitle={g?.name ?? "Group"}
-      markdown={`${comparison(words, preferences().languageMode)}${g?.notes ? `\n\n${g.notes}` : ""}`}
-      actions={
-        <ActionPanel>
-          <Action title="Refresh" onAction={refresh} />
-        </ActionPanel>
-      }
-    />
   );
 }
