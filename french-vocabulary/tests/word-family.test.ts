@@ -7,6 +7,9 @@ import { emptyLibrary, newWord, now, validateLibrary } from "../src/core/model";
 import { candidateSense, parseCandidates } from "../src/ai/core";
 import {
   familyKey,
+  familyMatchKey,
+  familyMatchBatch,
+  compatibleFamilySenses,
   familyMatches,
   familyRelations,
   saveFamily,
@@ -53,6 +56,85 @@ test("family matching preserves accents and pronominal forms and includes archiv
       .headword,
     "lavage",
   );
+});
+test("batch matching collects exact and annotated forms without changing records", () => {
+  const { lib, word, senseId } = sample();
+  const adj = { ...candidate, headword: "suivant", pos: "adj." };
+  const prep = newWord(
+    "suivant",
+    candidateSense({ ...candidate, pos: "prép." }),
+  );
+  const variant = newWord("suivant(e)", candidateSense(adj));
+  lib.words.push(prep, variant);
+  for (const form of ["suivant(e)(s)", "suivant,e,s", "suivant（e）"])
+    assert.equal(familyMatchKey(form), "suivant");
+  for (const form of ["acteur,trice", "mot(sens)", "aller, venir"])
+    assert.equal(familyMatchKey(form), familyKey(form));
+  assert.notEqual(familyMatchKey("retraité"), familyMatchKey("retraite"));
+  const matches = familyMatchBatch(lib, ["suivant"]).get("suivant")!;
+  assert.deepEqual(matches, [prep, variant]);
+  assert.equal(matches[1], variant);
+  assert.equal(compatibleFamilySenses(prep, "adj.").length, 0);
+  assert.equal(compatibleFamilySenses(variant, "adj.").length, 1);
+  assert.throws(
+    () =>
+      saveFamily(
+        lib,
+        word,
+        senseId,
+        [
+          {
+            candidate: adj,
+            existingId: prep.id,
+            targetSenseId: prep.senses[0].id,
+          },
+        ],
+        source,
+      ),
+    /matching part/,
+  );
+  assert.throws(
+    () =>
+      saveFamily(
+        lib,
+        word,
+        senseId,
+        [{ candidate: adj, existingId: variant.id }],
+        source,
+      ),
+    /matching part/,
+  );
+  assert.throws(
+    () => saveFamily(lib, word, senseId, [{ candidate: adj }], source),
+    /now exists/,
+  );
+  saveFamily(
+    lib,
+    structuredClone(word),
+    senseId,
+    [
+      {
+        candidate: adj,
+        existingId: variant.id,
+        targetSenseId: variant.senses[0].id,
+      },
+    ],
+    source,
+  );
+  assert.equal(word.familyLinks![0].targetWordId, variant.id);
+  assert.equal(variant.word, "suivant(e)");
+});
+test("batch matching retains only requested hits across repeated large-library scans", () => {
+  const { lib } = sample();
+  const template = lib.words[0];
+  for (let i = 0; i < 20000; i++)
+    lib.words.push({ ...template, id: String(i), word: "unrelated" + i });
+  for (let run = 0; run < 20; run++) {
+    const result = familyMatchBatch(lib, ["laver", "missing"]);
+    assert.equal(result.size, 2);
+    assert.equal(result.get("laver")!.length, 1);
+    assert.equal(result.get("missing")!.length, 0);
+  }
 });
 test("new words link by sense in both directions without altering learning or existing senses", () => {
   const { lib, word, senseId } = sample();

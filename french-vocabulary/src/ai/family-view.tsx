@@ -11,7 +11,7 @@ import {
   Toast,
 } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { autoBackup, report, store } from "../runtime";
 import { Library, Word } from "../core/model";
 import { md } from "../core/presentation";
@@ -23,8 +23,9 @@ import {
   getConfig,
 } from "./client";
 import {
-  familyKey,
-  familyMatches,
+  familyMatchBatch,
+  familyMatchKey,
+  compatibleFamilySenses,
   familyRelations,
   FamilySelection,
   saveFamily,
@@ -108,7 +109,21 @@ function FamilyPage({
   const [selected, setSelected] = useState<Record<number, FamilySelection>>({});
   const controller = useRef<AbortController | undefined>(undefined);
   const lock = useRef(false);
-  const links = familyRelations(lib, word.id, senseId);
+  const links = useMemo(
+    () => familyRelations(lib, word.id, senseId),
+    [lib, word.id, senseId],
+  );
+  const matchBatch = useMemo(
+    () =>
+      familyMatchBatch(lib, result?.items.map((c) => c.headword ?? "") ?? []),
+    [lib, result],
+  );
+  const isLinked = (c: AIResult["items"][number]) =>
+    (matchBatch.get(familyMatchKey(c.headword ?? "")) ?? []).some((w) =>
+      compatibleFamilySenses(w, c.pos ?? "").some((s) =>
+        links.some((link) => link.word.id === w.id && link.senseId === s.id),
+      ),
+    );
   const input = JSON.stringify({
     word: word.word,
     senses: word.senses
@@ -326,18 +341,26 @@ function FamilyPage({
       >
         {result?.items
           .filter(
-            (c) => c.headword && familyKey(c.headword) !== familyKey(word.word),
+            (c) =>
+              c.headword &&
+              familyMatchKey(c.headword) !== familyMatchKey(word.word),
           )
           .map((c, i) => ({
             c,
             i,
-            linked: links.some(
-              (link) => familyKey(link.word.word) === familyKey(c.headword!),
-            ),
+            linked: isLinked(c),
           }))
           .sort((a, b) => Number(a.linked) - Number(b.linked))
           .map(({ c, i, linked }) => {
-            const matches = familyMatches(lib, c.headword!);
+            const matches = matchBatch.get(familyMatchKey(c.headword!)) ?? [];
+            const compatible = matches.filter(
+              (w) => compatibleFamilySenses(w, c.pos ?? "").length,
+            );
+            const rankedMatches = [...matches].sort(
+              (a, b) =>
+                Number(!compatible.includes(a)) -
+                Number(!compatible.includes(b)),
+            );
             const chosen = selected[i];
             const toggle = (existingId?: string, targetSenseId?: string) =>
               setSelected((v) => ({
@@ -375,7 +398,9 @@ function FamilyPage({
                     tooltip: linked
                       ? "Already Linked"
                       : matches.length
-                        ? "Already in Library · Link Only"
+                        ? compatible.length
+                          ? "Already in Library · Select a Matching Sense"
+                          : "Headword Found · Different Part of Speech · View Only"
                         : "New Word",
                   },
                 ]}
@@ -419,33 +444,33 @@ function FamilyPage({
                           title="Select New Word"
                           onAction={() => toggle()}
                         />
-                      ) : (
-                        <ActionPanel.Submenu title="Select Existing Word to Link">
-                          {matches.map((w) => (
+                      ) : compatible.length ? (
+                        <ActionPanel.Submenu title="Select Existing Sense to Link">
+                          {compatible.map((w) => (
                             <ActionPanel.Submenu
                               key={w.id}
                               title={w.word + (w.archived ? " (Archived)" : "")}
                             >
-                              <Action
-                                title="Link Word (No Specific Sense)"
-                                onAction={() => toggle(w.id)}
-                              />
-                              {w.senses.map((s) => (
-                                <Action
-                                  key={s.id}
-                                  title={s.pos + " · " + (s.zh || s.en)}
-                                  onAction={() => toggle(w.id, s.id)}
-                                />
-                              ))}
+                              {compatibleFamilySenses(w, c.pos ?? "").map(
+                                (s) => (
+                                  <Action
+                                    key={s.id}
+                                    title={s.pos + " · " + (s.zh || s.en)}
+                                    onAction={() => toggle(w.id, s.id)}
+                                  />
+                                ),
+                              )}
                             </ActionPanel.Submenu>
                           ))}
                         </ActionPanel.Submenu>
-                      ))}
-                    {matches.map((w) => (
+                      ) : null)}
+                    {rankedMatches.map((w) => (
                       <Action
                         key={w.id}
                         title={
-                          "View Existing Word" +
+                          "View " +
+                          w.word +
+                          (compatible.includes(w) ? "" : " · Different POS") +
                           (w.archived ? " (Archived)" : "")
                         }
                         onAction={() =>

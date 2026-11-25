@@ -1,5 +1,7 @@
 import {
   canonical,
+  isNoun,
+  Sense,
   ContentSource,
   Library,
   newWord,
@@ -10,8 +12,41 @@ import { Candidate, candidateSense, safeVocabulary } from "./core";
 
 export const familyKey = (word: string) =>
   canonical(word).toLocaleLowerCase("fr");
+// Matching only: never rewrite imported spellings or generate all inflected forms.
+export function familyMatchKey(word: string) {
+  const exact = familyKey(word);
+  const base = exact
+    .replace(/（/g, "(")
+    .replace(/）/g, ")")
+    .replace(/\((?:e|es|s)\)(?=\(|[,，]|\s|$)/gu, "")
+    .replace(/(?:[,，]\s*(?:es|e|s))+$/u, "");
+  return /[(),，（）]/u.test(base) ? exact : base;
+}
+export function familyMatchBatch(lib: Library, headwords: string[]) {
+  // The map contains only requested candidates and matching Word references.
+  // No whole-library index, cloned words, persistent cache, or inflection expansion.
+  const matches = new Map<string, Word[]>();
+  for (const headword of headwords) matches.set(familyMatchKey(headword), []);
+  if (!matches.size) return matches;
+  for (const word of lib.words) {
+    const bucket = matches.get(familyMatchKey(word.word));
+    if (bucket) bucket.push(word);
+  }
+  return matches;
+}
 export function familyMatches(lib: Library, headword: string) {
-  return lib.words.filter((w) => familyKey(w.word) === familyKey(headword));
+  return familyMatchBatch(lib, [headword]).get(familyMatchKey(headword)) ?? [];
+}
+function familyPOS(pos: string) {
+  const value = canonical(pos).toLocaleLowerCase("fr");
+  if (isNoun(value)) return "noun";
+  if (/^adj(?:\.|\b)/u.test(value)) return "adjective";
+  if (/^v(?:\.|\b)/u.test(value)) return "verb";
+  if (/^pr[ée]p(?:\.|\b)/u.test(value)) return "preposition";
+  return value;
+}
+export function compatibleFamilySenses(word: Word, pos: string): Sense[] {
+  return word.senses.filter((s) => familyPOS(s.pos) === familyPOS(pos));
 }
 export function familyRelations(lib: Library, wordId: string, senseId: string) {
   const rows: { word: Word; senseId?: string; description: string }[] = [];
@@ -71,22 +106,33 @@ export function saveFamily(
   if (!selections.length) throw Error("Select at least one candidate.");
   // Only words created in this save may receive additional candidate senses.
   const created = new Map<string, Word>();
+  const matchBatch = familyMatchBatch(
+    lib,
+    selections.map((s) => s.candidate.headword ?? ""),
+  );
   for (const { candidate: c, existingId, targetSenseId } of selections) {
     if (!c.headword || !safeVocabulary(c.headword) || !c.text)
       throw Error("Invalid family candidate.");
-    if (familyKey(c.headword) === familyKey(word.word))
+    if (familyMatchKey(c.headword) === familyMatchKey(word.word))
       throw Error("A word cannot link to itself.");
-    const matches = familyMatches(lib, c.headword);
+    const matches = matchBatch.get(familyMatchKey(c.headword)) ?? [];
     let target: Word;
     let targetSense = targetSenseId;
     if (existingId) {
       const found = matches.find((w) => w.id === existingId);
       if (!found) throw Error("Existing word changed. Refresh candidates.");
       target = found;
-      if (targetSense && !target.senses.some((s) => s.id === targetSense))
-        throw Error("Target sense changed.");
+      if (
+        !targetSense ||
+        !compatibleFamilySenses(target, c.pos ?? "").some(
+          (s) => s.id === targetSense,
+        )
+      )
+        throw Error(
+          "Choose an existing sense with the matching part of speech. Refresh candidates if it changed.",
+        );
     } else {
-      const batchWord = created.get(familyKey(c.headword));
+      const batchWord = created.get(familyMatchKey(c.headword));
       if (matches.length && !batchWord)
         throw Error(
           "Word now exists. Refresh candidates to link it without adding senses.",
@@ -103,7 +149,7 @@ export function saveFamily(
         target = newWord(c.headword, sense);
         targetSense = sense.id;
         lib.words.push(target);
-        created.set(familyKey(c.headword), target);
+        created.set(familyMatchKey(c.headword), target);
       }
     }
     word.familyLinks ??= [];
