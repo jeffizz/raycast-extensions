@@ -9,6 +9,7 @@ import {
 } from "@raycast/api";
 import { useEffect, useRef, useState } from "react";
 import { autoBackup, report, store, useLibrary } from "../runtime";
+import { GroupDetails } from "./group-details";
 import { searchKey, Word } from "../core/model";
 import {
   linkPracticeConfusion,
@@ -18,12 +19,14 @@ import {
 export function PracticeConfusion({
   current,
   onSaved,
+  onViewGroups,
 }: {
   current: Word;
   onSaved?: () => Promise<void>;
+  onViewGroups?: () => void;
 }) {
   const { lib, loading } = useLibrary(false);
-  const { pop } = useNavigation();
+  const { pop, push } = useNavigation();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [includeArchived, setIncludeArchived] = useState(false);
@@ -55,6 +58,13 @@ export function PracticeConfusion({
           setDestination(true);
         }}
       />
+      {onViewGroups && (
+        <Action
+          title="View Related Groups"
+          icon={Icon.List}
+          onAction={onViewGroups}
+        />
+      )}
       <Action
         title={
           includeArchived ? "Hide Archived Words" : "Include Archived Words"
@@ -90,10 +100,11 @@ export function PracticeConfusion({
     const key = searchKey(groupQuery.trim());
     const groups = lib.groups.filter(
       (g) =>
-        !key ||
-        searchKey(g.name + " " + confusionWordTitle(lib, g.wordIds)).includes(
-          key,
-        ),
+        g.wordIds.includes(current.id) &&
+        (!key ||
+          searchKey(g.name + " " + confusionWordTitle(lib, g.wordIds)).includes(
+            key,
+          )),
     );
     return (
       <List
@@ -136,6 +147,11 @@ export function PracticeConfusion({
             actions={
               <ActionPanel>
                 <Action title="Add to Group" onAction={() => saveGroup(g.id)} />
+                <Action
+                  title="Open Group Details"
+                  icon={Icon.List}
+                  onAction={() => push(<GroupDetails groupId={g.id} />)}
+                />
                 <Action
                   title="Back to Word Search"
                   onAction={() => setDestination(false)}

@@ -3,7 +3,13 @@ import { useLibrary } from "../runtime";
 import { GroupDetails } from "./group-details";
 import { PracticeConfusion } from "./practice-confusion";
 
-export function RelatedConfusionGroups({ wordId }: { wordId: string }) {
+export function RelatedConfusionGroups({
+  wordId,
+  viewOnly = false,
+}: {
+  wordId: string;
+  viewOnly?: boolean;
+}) {
   const { lib, loading, refresh } = useLibrary(false);
   const { push } = useNavigation();
   const word = lib.words.find((w) => w.id === wordId);
@@ -18,6 +24,16 @@ export function RelatedConfusionGroups({ wordId }: { wordId: string }) {
         }
       />
     ) : null;
+  if (word && !viewOnly)
+    return (
+      <PracticeConfusion
+        current={word}
+        onSaved={refresh}
+        onViewGroups={() =>
+          push(<RelatedConfusionGroups wordId={wordId} viewOnly />)
+        }
+      />
+    );
   return (
     <List
       isLoading={loading}

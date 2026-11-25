@@ -15,6 +15,18 @@ test("related group views exclude review history and only show groups containing
     "utf8",
   );
   assert.ok(source.includes("useLibrary(false)"));
+  assert.ok(source.includes("if (word && !viewOnly)"));
+  assert.ok(source.includes("onViewGroups="));
+  const picker = readFileSync(
+    new URL("../src/components/practice-confusion.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.ok(picker.includes("g.wordIds.includes(current.id)"));
+  assert.ok(!picker.includes("selected.every"));
+  assert.ok(
+    picker.indexOf("if (destination)") < picker.indexOf('key="word-search"'),
+  );
+  assert.ok(picker.includes('title="Open Group Details"'));
   assert.ok(source.includes("g.wordIds.includes(wordId)"));
   assert.ok(source.includes('title="Open Group Details"'));
   assert.ok(source.includes("<GroupDetails groupId={group.id} />"));
