@@ -24,7 +24,8 @@ export function RelatedConfusionGroups({
         }
       />
     ) : null;
-  if (word && !viewOnly)
+  // Wait for the local lookup; only an empty result skips straight to word selection.
+  if (!loading && word && !viewOnly && groups.length === 0)
     return (
       <PracticeConfusion
         current={word}

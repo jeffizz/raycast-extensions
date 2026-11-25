@@ -15,7 +15,11 @@ test("related group views exclude review history and only show groups containing
     "utf8",
   );
   assert.ok(source.includes("useLibrary(false)"));
-  assert.ok(source.includes("if (word && !viewOnly)"));
+  assert.ok(
+    source.includes(
+      "if (!loading && word && !viewOnly && groups.length === 0)",
+    ),
+  );
   assert.ok(source.includes("onViewGroups="));
   const picker = readFileSync(
     new URL("../src/components/practice-confusion.tsx", import.meta.url),
