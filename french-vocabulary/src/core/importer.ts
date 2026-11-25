@@ -206,6 +206,7 @@ export function applyImport(
       en: values.en,
       zh: values.zh,
       ...inferSense(values.pos),
+      source: { kind: "import", at: now() },
     };
     const word = index.get(canonical(values.word));
     if (!word) {

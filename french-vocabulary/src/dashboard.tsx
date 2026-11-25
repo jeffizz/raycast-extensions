@@ -48,6 +48,9 @@ import {
 import { escapeMD, WordActions, wordMarkdown } from "./components/word";
 import { modeSettings, practiceModes } from "./core/practice-settings";
 import ManageElevenLabsKeys from "./manage-elevenlabs-keys";
+import { AIUsage } from "./ai/usage-view";
+import { AISettings } from "./ai/settings";
+import { AIWorkflow } from "./ai/workflow";
 export default function Dashboard() {
   const { lib, loading, refresh } = useLibrary(),
     { push } = useNavigation();
@@ -322,6 +325,44 @@ export default function Dashboard() {
                 onAction={() => push(<BackupSchedule onSaved={reload} />)}
               />
               {backupActions}
+            </ActionPanel>
+          }
+        />
+      </List.Section>
+      <List.Section title="AI Vocabulary">
+        <List.Item
+          title="AI Token Usage"
+          icon={Icon.BarChart}
+          actions={
+            <ActionPanel>
+              <Action
+                title="View AI Token Usage"
+                onAction={() => push(<AIUsage />)}
+              />
+            </ActionPanel>
+          }
+        />
+        <List.Item
+          title="AI Settings & Keys"
+          icon={Icon.Key}
+          actions={
+            <ActionPanel>
+              <Action
+                title="Open AI Settings"
+                onAction={() => push(<AISettings />)}
+              />
+            </ActionPanel>
+          }
+        />
+        <List.Item
+          title="Add Vocabulary with AI"
+          icon={Icon.Plus}
+          actions={
+            <ActionPanel>
+              <Action
+                title="Add Vocabulary with AI"
+                onAction={() => push(<AIWorkflow />)}
+              />
             </ActionPanel>
           }
         />

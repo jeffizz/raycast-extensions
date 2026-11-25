@@ -5,7 +5,37 @@ export type Onset =
   "vowel" | "consonant" | "mute-h" | "aspirated-h" | "unknown";
 export type Familiarity = "unmarked" | "unknown" | "fuzzy" | "known";
 export type Mode = "copy" | "meaning" | "spelling" | "gender";
+export type ContentSource = {
+  kind: "ai" | "import";
+  provider?: string;
+  model?: string;
+  at: string;
+};
+function validContentSource(value: ContentSource | undefined) {
+  return (
+    value === undefined ||
+    (!!value &&
+      ["ai", "import"].includes(value.kind) &&
+      typeof value.at === "string" &&
+      Number.isFinite(Date.parse(value.at)) &&
+      [value.provider, value.model].every(
+        (v) => v === undefined || typeof v === "string",
+      ))
+  );
+}
+export type Collocation = {
+  id: string;
+  senseId?: string;
+  pattern: string;
+  meaning: string;
+  preposition?: string;
+  french: string;
+  translation: string;
+  source: ContentSource;
+  createdAt: string;
+};
 export type Sense = {
+  source?: ContentSource;
   id: string;
   pos: string;
   ipa: string;
@@ -16,12 +46,28 @@ export type Sense = {
   onset: Onset;
   genderSource: string;
 };
-export type Example = { id: string; french: string; translation: string };
+export type Example = {
+  id: string;
+  french: string;
+  translation: string;
+  senseId?: string;
+};
+export type FamilyLink = {
+  senseId: string;
+  targetWordId: string;
+  targetSenseId?: string;
+  description: string;
+  source: ContentSource;
+};
 export type Word = {
+  familyLinks?: FamilyLink[];
   id: string;
   word: string;
   senses: Sense[];
   notes: string;
+  mnemonic?: string;
+  collocations?: string;
+  collocationEntries?: Collocation[];
   examples: Example[];
   tags: string[];
   familiarity: Familiarity;
@@ -315,6 +361,9 @@ export function validateLibrary(value: unknown): asserts value is Library {
       (w.meaningFamiliaritySuccessStreak !== undefined &&
         w.meaningFamiliaritySuccessStreak !== 0 &&
         w.meaningFamiliaritySuccessStreak !== 1) ||
+      [w.mnemonic, w.collocations].some(
+        (v) => v !== undefined && typeof v !== "string",
+      ) ||
       typeof w.archived !== "boolean" ||
       typeof w.practice !== "boolean" ||
       [w.notes, w.speech, w.articleOverride, w.createdAt, w.updatedAt].some(
@@ -335,17 +384,57 @@ export function validateLibrary(value: unknown): asserts value is Library {
         !["vowel", "consonant", "mute-h", "aspirated-h", "unknown"].includes(
           s.onset,
         ) ||
-        typeof s.plural !== "boolean"
+        typeof s.plural !== "boolean" ||
+        !validContentSource(s.source)
       )
         throw Error("Invalid sense in backup.");
       ids.add(s.id);
+    }
+    if (w.collocationEntries !== undefined) {
+      if (!Array.isArray(w.collocationEntries))
+        throw Error("Invalid collocations in backup.");
+      const entryIds = new Set<string>();
+      for (const e of w.collocationEntries) {
+        if (
+          !e ||
+          typeof e.id !== "string" ||
+          entryIds.has(e.id) ||
+          [e.pattern, e.meaning, e.french, e.translation, e.createdAt].some(
+            (v) => typeof v !== "string",
+          ) ||
+          !e.source ||
+          !validContentSource(e.source) ||
+          (e.senseId !== undefined && typeof e.senseId !== "string") ||
+          (e.preposition !== undefined && typeof e.preposition !== "string")
+        )
+          throw Error("Invalid collocation in backup.");
+        entryIds.add(e.id);
+      }
+    }
+    if (w.familyLinks !== undefined) {
+      if (!Array.isArray(w.familyLinks))
+        throw Error("Invalid word family links.");
+      for (const link of w.familyLinks) {
+        if (
+          !link ||
+          typeof link.senseId !== "string" ||
+          typeof link.targetWordId !== "string" ||
+          (link.targetSenseId !== undefined &&
+            typeof link.targetSenseId !== "string") ||
+          typeof link.description !== "string" ||
+          !link.source ||
+          !validContentSource(link.source)
+        )
+          throw Error("Invalid word family link.");
+      }
     }
     for (const e of w.examples)
       if (
         !e ||
         typeof e.id !== "string" ||
         typeof e.french !== "string" ||
-        typeof e.translation !== "string"
+        typeof e.translation !== "string" ||
+        (e.senseId !== undefined && typeof e.senseId !== "string")
       )
         throw Error("Invalid example in backup.");
     if (w.tags.some((t) => typeof t !== "string"))

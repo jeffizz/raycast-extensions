@@ -308,6 +308,24 @@ export class Store {
       throw error;
     }
   }
+  async mutateContent<T>(
+    expectedLibraryId: string,
+    change: (lib: Library) => T,
+  ): Promise<T> {
+    const lib = await this.load(false);
+    if (lib.libraryId !== expectedLibraryId)
+      throw Error("Library changed. Reopen AI preview.");
+    const baseline = structuredClone(lib);
+    const result = change(lib);
+    await this.save(
+      lib,
+      baseline.revision,
+      baseline.libraryId,
+      false,
+      baseline,
+    );
+    return result;
+  }
   async updateSettings(
     expectedLibraryId: string,
     change: (lib: Library) => void,

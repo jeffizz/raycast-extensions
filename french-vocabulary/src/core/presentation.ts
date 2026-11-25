@@ -59,7 +59,7 @@ export function wordDetails(
   language: LanguageMode = "zh-first",
 ) {
   const phrases = mnemonicPhrases(w);
-  return `${phrases.length ? `*${phrases.map(md).join(" · ")}*\n\n` : ""}${w.senses.map((s) => senseMarkdown(s, language, showIPA)).join("\n\n---\n\n")}${w.notes ? `\n\n## Notes\n\n${w.notes}` : ""}${w.examples.length ? `\n\n## Examples\n\n${w.examples.map((e) => `* ${md(e.french)}${e.translation ? `\n  ${md(e.translation)}` : ""}`).join("\n\n")}` : ""}`;
+  return `${phrases.length ? `*${phrases.map(md).join(" · ")}*\n\n` : ""}${w.senses.map((s) => senseMarkdown(s, language, showIPA)).join("\n\n---\n\n")}${w.mnemonic ? `\n\n## Mnemonic\n\n${w.mnemonic}` : ""}${w.collocations ? `\n\n## Collocations\n\n${w.collocations}` : ""}${w.collocationEntries?.length ? `\n\n## Saved Collocations\n\n${w.collocationEntries.map((e) => `**${md(e.pattern)}** — ${md(e.meaning)}\n\n${md(e.french)}\n\n${md(e.translation)}`).join("\n\n---\n\n")}` : ""}${w.notes ? `\n\n## Notes\n\n${w.notes}` : ""}${w.examples.length ? `\n\n## Examples\n\n${w.examples.map((e) => `* ${md(e.french)}${e.translation ? `\n  ${md(e.translation)}` : ""}`).join("\n\n")}` : ""}`;
 }
 export function detailMarkdown(
   w: Word,

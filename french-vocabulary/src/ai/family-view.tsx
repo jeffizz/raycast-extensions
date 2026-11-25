@@ -1,0 +1,457 @@
+import {
+  Action,
+  ActionPanel,
+  Detail,
+  Color,
+  Icon,
+  List,
+  confirmAlert,
+  useNavigation,
+  showToast,
+  Toast,
+} from "@raycast/api";
+import { usePromise } from "@raycast/utils";
+import { useEffect, useRef, useState } from "react";
+import { autoBackup, report, store } from "../runtime";
+import { Library, Word } from "../core/model";
+import { md } from "../core/presentation";
+import {
+  AIConfig,
+  AIResult,
+  generate,
+  getAPIConfig,
+  getConfig,
+} from "./client";
+import {
+  familyKey,
+  familyMatches,
+  familyRelations,
+  FamilySelection,
+  saveFamily,
+} from "./family";
+
+const wordPreview = (word: Word) =>
+  "# " +
+  md(word.word) +
+  "\n\n" +
+  word.senses
+    .map(
+      (s) =>
+        "(" +
+        md(s.pos) +
+        ") /" +
+        md(s.ipa) +
+        "/\n\n" +
+        md(s.zh) +
+        "\n\n" +
+        md(s.en),
+    )
+    .join("\n\n---\n\n");
+export function WordFamily({
+  word,
+  selectedSenseId,
+  onSaved,
+}: {
+  word: Word;
+  selectedSenseId?: string;
+  onSaved?: () => Promise<void>;
+}) {
+  const { data, isLoading } = usePromise(() => store.load(false));
+  const [senseId, setSenseId] = useState(
+    selectedSenseId ?? word.senses[0]?.id ?? "",
+  );
+  if (!data)
+    return (
+      <List isLoading={isLoading}>
+        <List.EmptyView title="Loading Word Family" />
+      </List>
+    );
+  const current = data.words.find((w) => w.id === word.id);
+  if (!current)
+    return (
+      <List>
+        <List.EmptyView title="Word No Longer Exists" />
+      </List>
+    );
+  const sense =
+    current.senses.find((s) => s.id === senseId) ?? current.senses[0];
+  return (
+    <FamilyPage
+      key={sense.id}
+      initial={data}
+      word={current}
+      senseId={sense.id}
+      setSenseId={setSenseId}
+      onSaved={onSaved}
+    />
+  );
+}
+function FamilyPage({
+  initial,
+  word,
+  senseId,
+  setSenseId,
+  onSaved,
+}: {
+  initial: Library;
+  word: Word;
+  senseId: string;
+  setSenseId: (id: string) => void;
+  onSaved?: () => Promise<void>;
+}) {
+  const { push } = useNavigation();
+  const [lib, setLib] = useState(initial);
+  const [result, setResult] = useState<AIResult>();
+  const [config, setConfig] = useState<AIConfig>();
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string>();
+  const [selected, setSelected] = useState<Record<number, FamilySelection>>({});
+  const controller = useRef<AbortController | undefined>(undefined);
+  const lock = useRef(false);
+  const links = familyRelations(lib, word.id, senseId);
+  const input = JSON.stringify({
+    word: word.word,
+    senses: word.senses
+      .filter((s) => s.id === senseId)
+      .map((s) => ({ pos: s.pos, zh: s.zh, en: s.en })),
+  });
+  const run = async (force = false, override?: AIConfig) => {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setFailure(undefined);
+    const request = new AbortController();
+    controller.current = request;
+    try {
+      const connection = override ?? (await getConfig());
+      setConfig(connection);
+      const next = await generate(
+        connection,
+        "family",
+        input,
+        request.signal,
+        force,
+      );
+      const latest = await store.load(false);
+      if (request.signal.aborted) return;
+      setLib(latest);
+      setResult(next);
+      setSelected({});
+    } catch (error) {
+      if (!request.signal.aborted) {
+        setFailure(
+          error instanceof Error ? error.message : "Generation failed.",
+        );
+        await report(error);
+      }
+    } finally {
+      if (!request.signal.aborted) setBusy(false);
+      lock.current = false;
+    }
+  };
+  useEffect(() => {
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (active && !links.length) void run();
+    });
+    return () => {
+      active = false;
+      controller.current?.abort();
+    };
+  }, []);
+  const save = async () => {
+    if (lock.current) return;
+    const choices = Object.values(selected);
+    if (!choices.length || !config || !result) return;
+    lock.current = true;
+    setBusy(true);
+    try {
+      if (
+        !(await confirmAlert({
+          title: "Save word family?",
+          message:
+            choices
+              .map(
+                (s) =>
+                  (s.existingId ? "Link only: " : "Create and link: ") +
+                  s.candidate.headword,
+              )
+              .join("\n") + "\nExisting words and senses are never modified.",
+        }))
+      )
+        return;
+      await store.mutateContent(lib.libraryId, (l) =>
+        saveFamily(l, word, senseId, choices, {
+          kind: "ai",
+          provider:
+            config.connection === "codex" ? "codex-cli" : config.provider,
+          model: config.model,
+          at: result.generatedAt ?? new Date().toISOString(),
+        }),
+      );
+      setLib(await store.load(false));
+      setSelected({});
+      setResult(undefined);
+      await showToast({
+        style: Toast.Style.Success,
+        title: "Word Family Saved",
+      });
+      await autoBackup();
+      await onSaved?.();
+    } catch (error) {
+      await report(error);
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  };
+  const common = (
+    <>
+      <Action
+        title="Save Selected Candidates"
+        icon={Icon.Checkmark}
+        onAction={save}
+      />
+      <Action
+        title={result ? "Regenerate with AI" : "Find More with AI"}
+        icon={Icon.Stars}
+        onAction={() => run(!!result)}
+      />
+      <Action
+        title="Refresh Local Links"
+        onAction={async () => {
+          setLib(await store.load(false));
+          setSelected({});
+        }}
+      />
+      {failure && config?.connection === "codex" && (
+        <Action
+          title="Retry with API"
+          onAction={async () => {
+            try {
+              const api = await getAPIConfig();
+              if (
+                await confirmAlert({
+                  title: "Retry with paid API?",
+                  message:
+                    api.provider +
+                    " / " +
+                    api.model +
+                    ". API charges may apply.",
+                })
+              )
+                await run(false, api);
+            } catch (error) {
+              await report(error);
+            }
+          }}
+        />
+      )}
+      <Action
+        title="Cancel Request"
+        onAction={() => {
+          controller.current?.abort();
+          setBusy(false);
+        }}
+      />
+    </>
+  );
+  const open = (w: Word) => (
+    <Action
+      title="View Existing Word"
+      onAction={() => push(<Detail markdown={wordPreview(w)} />)}
+    />
+  );
+  return (
+    <List
+      isLoading={busy}
+      isShowingDetail
+      navigationTitle={"Word Family · " + word.word}
+      searchBarAccessory={
+        <List.Dropdown
+          tooltip="Source Sense"
+          value={senseId}
+          onChange={setSenseId}
+        >
+          {word.senses.map((s) => (
+            <List.Dropdown.Item
+              key={s.id}
+              value={s.id}
+              title={s.pos + " · " + (s.zh || s.en)}
+            />
+          ))}
+        </List.Dropdown>
+      }
+      actions={<ActionPanel>{common}</ActionPanel>}
+    >
+      <List.EmptyView
+        title={
+          busy
+            ? "Finding Related Words…"
+            : failure
+              ? "Generation Failed"
+              : result
+                ? "No Related Words Found"
+                : "No Saved Links"
+        }
+        description={
+          failure ??
+          "Only the current word and selected sense are sent. Choose Find More with AI to try again."
+        }
+      />
+      <List.Section title="Saved Word Family">
+        {links.map((link, i) => (
+          <List.Item
+            key={i}
+            title={link.word.word}
+            subtitle={link.description}
+            detail={
+              <List.Item.Detail
+                markdown={
+                  wordPreview(link.word) + "\n\n" + md(link.description)
+                }
+              />
+            }
+            actions={
+              <ActionPanel>
+                {open(link.word)}
+                {common}
+              </ActionPanel>
+            }
+          />
+        ))}
+      </List.Section>
+      <List.Section
+        title={result?.cached ? "Candidates · Cached" : "AI Candidates"}
+      >
+        {result?.items
+          .filter(
+            (c) => c.headword && familyKey(c.headword) !== familyKey(word.word),
+          )
+          .map((c, i) => ({
+            c,
+            i,
+            linked: links.some(
+              (link) => familyKey(link.word.word) === familyKey(c.headword!),
+            ),
+          }))
+          .sort((a, b) => Number(a.linked) - Number(b.linked))
+          .map(({ c, i, linked }) => {
+            const matches = familyMatches(lib, c.headword!);
+            const chosen = selected[i];
+            const toggle = (existingId?: string, targetSenseId?: string) =>
+              setSelected((v) => ({
+                ...v,
+                [i]: { candidate: c, existingId, targetSenseId },
+              }));
+            const deselect = () =>
+              setSelected((v) => {
+                const next = { ...v };
+                delete next[i];
+                return next;
+              });
+            return (
+              <List.Item
+                key={i}
+                title={c.headword!}
+                icon={
+                  linked
+                    ? { source: Icon.Checkmark, tintColor: Color.SecondaryText }
+                    : chosen
+                      ? Icon.Checkmark
+                      : Icon.Circle
+                }
+                subtitle={c.pos + " · " + c.zh}
+                accessories={[
+                  {
+                    text: linked
+                      ? "Already Linked"
+                      : matches.length
+                        ? "Already in Library · Link Only"
+                        : "New Word",
+                  },
+                ]}
+                detail={
+                  <List.Item.Detail
+                    markdown={
+                      "# " +
+                      md(c.headword!) +
+                      "\n\n(" +
+                      md(c.pos!) +
+                      ") /" +
+                      md(c.ipa!) +
+                      "/\n\n" +
+                      md(c.zh!) +
+                      "\n\n" +
+                      md(c.en!) +
+                      "\n\n" +
+                      md(c.text!) +
+                      "\n\n" +
+                      (linked
+                        ? "Already linked — no selection needed."
+                        : chosen
+                          ? "Selected: " +
+                            (chosen.existingId
+                              ? "link existing word"
+                              : "create new word")
+                          : "Not selected")
+                    }
+                  />
+                }
+                actions={
+                  <ActionPanel>
+                    {!linked &&
+                      (chosen ? (
+                        <Action
+                          title="Deselect Candidate"
+                          onAction={deselect}
+                        />
+                      ) : !matches.length ? (
+                        <Action
+                          title="Select New Word"
+                          onAction={() => toggle()}
+                        />
+                      ) : (
+                        <ActionPanel.Submenu title="Select Existing Word to Link">
+                          {matches.map((w) => (
+                            <ActionPanel.Submenu
+                              key={w.id}
+                              title={w.word + (w.archived ? " (Archived)" : "")}
+                            >
+                              <Action
+                                title="Link Word (No Specific Sense)"
+                                onAction={() => toggle(w.id)}
+                              />
+                              {w.senses.map((s) => (
+                                <Action
+                                  key={s.id}
+                                  title={s.pos + " · " + (s.zh || s.en)}
+                                  onAction={() => toggle(w.id, s.id)}
+                                />
+                              ))}
+                            </ActionPanel.Submenu>
+                          ))}
+                        </ActionPanel.Submenu>
+                      ))}
+                    {matches.map((w) => (
+                      <Action
+                        key={w.id}
+                        title={
+                          "View Existing Word" +
+                          (w.archived ? " (Archived)" : "")
+                        }
+                        onAction={() =>
+                          push(<Detail markdown={wordPreview(w)} />)
+                        }
+                      />
+                    ))}
+                    {common}
+                  </ActionPanel>
+                }
+              />
+            );
+          })}
+      </List.Section>
+    </List>
+  );
+}

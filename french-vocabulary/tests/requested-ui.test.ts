@@ -364,6 +364,8 @@ test("all four translation modes apply to details and comparison columns", () =>
   assert.ok(comparison([w]).includes("去程票"));
   const compact = detailMarkdown(w);
   assert.ok(compact.includes("(v.i.)  \n去，走  \nto go\n\n---\n\n(n.m.)"));
+  assert.ok(!compact.includes("*Import*"));
+  assert.ok(!compact.includes("*AI*"));
   assert.ok(!compact.includes("EN:"));
   assert.ok(!compact.includes("CN:"));
 });

@@ -11,6 +11,12 @@
   "license": "MIT",
   "commands": [
     {
+      "name": "add-with-ai",
+      "title": "Add Vocabulary with AI",
+      "description": "Review AI-generated French senses before saving",
+      "mode": "view"
+    },
+    {
       "name": "browse",
       "title": "Browse Vocabulary",
       "description": "Browse, annotate, compare, and select vocabulary for practice",

@@ -22,6 +22,7 @@ import {
 } from "../core/group-order";
 import { speakWord, stopSpeech } from "../speech";
 import { statusIcon } from "./status";
+import { AIWorkflow } from "../ai/workflow";
 
 export function GroupDetails({ groupId }: { groupId: string }) {
   const { lib, loading, refresh } = useLibrary(false);
@@ -58,6 +59,16 @@ export function GroupDetails({ groupId }: { groupId: string }) {
   };
   const common = (
     <>
+      {group && (
+        <Action
+          title="Generate Comparison with AI"
+          onAction={() =>
+            push(
+              <AIWorkflow group={group} task="comparison" onSaved={refresh} />,
+            )
+          }
+        />
+      )}
       <Action
         title="Sort A–Z"
         onAction={() =>

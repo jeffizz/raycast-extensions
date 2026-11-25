@@ -800,6 +800,7 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
                     word={w}
                     refresh={safeRefresh}
                     practiceShortcut={marked.length === 0}
+                    selectedSenseId={listLayout ? sense.id : undefined}
                   />
                   <ActionPanel.Section
                     title={

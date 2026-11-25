@@ -11,6 +11,7 @@ import {
 } from "@raycast/api";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Grade } from "ts-fsrs";
+import { AIWordActions } from "./ai/workflow";
 import { RelatedConfusionGroups } from "./components/related-confusion-groups";
 import { ReinforcementQuestion } from "./components/reinforcement-question";
 import {
@@ -1193,6 +1194,7 @@ function ActivePracticeSession({
           push(<RelatedConfusionGroups wordId={q.word.id} />);
         }}
       />
+      <AIWordActions word={q.word} selectedSenseId={q.sense?.id} />
       <Action.OpenInBrowser
         title="Look up in Frdic"
         shortcut={{ modifiers: ["cmd"], key: "d" }}

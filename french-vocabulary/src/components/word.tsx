@@ -33,6 +33,7 @@ import {
 import { autoBackup, preferences, report, store, useLibrary } from "../runtime";
 import { speakTexts, speakWord, stopSpeech } from "../speech";
 import { enrichWord } from "../lexicon";
+import { AIWordActions } from "../ai/workflow";
 import { RelatedConfusionGroups } from "./related-confusion-groups";
 
 export const escapeMD = (s: string) => s.replace(/[\\`*_{}[\]<>#|]/g, "\\$&");
@@ -44,10 +45,12 @@ export function WordActions({
   word: w,
   refresh,
   practiceShortcut = true,
+  selectedSenseId,
 }: {
   word: Word;
   refresh: () => Promise<void>;
   practiceShortcut?: boolean;
+  selectedSenseId?: string;
 }) {
   const { push } = useNavigation();
   const update = async (fn: (w: Word) => void) => {
@@ -142,6 +145,11 @@ export function WordActions({
           stopSpeech();
           push(<RelatedConfusionGroups wordId={w.id} />);
         }}
+      />
+      <AIWordActions
+        word={w}
+        onSaved={refresh}
+        selectedSenseId={selectedSenseId}
       />
       <Action
         title="Enrich Noun Data from Lexik"
@@ -296,7 +304,7 @@ export function Senses({ wordId }: { wordId: string }) {
             .join(" · ")}
           detail={
             <List.Item.Detail
-              markdown={`**IPA:** ${escapeMD(s.ipa)}\n\n${translations(s, preferences().languageMode)}\n\n**Gender:** ${genderLabel(s.gender)}\n\n**Source:** ${s.genderSource}\n\n**Onset:** ${s.onset}`}
+              markdown={`**IPA:** ${escapeMD(s.ipa)}\n\n${translations(s, preferences().languageMode)}\n\n**Gender:** ${genderLabel(s.gender)}\n\n**Source:** ${s.source ? (s.source.kind === "ai" ? "AI" : "Import") : "Unknown"}\n\n**Gender Source:** ${escapeMD(s.genderSource)}\n\n**Onset:** ${s.onset}`}
             />
           }
           actions={
