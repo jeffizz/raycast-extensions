@@ -5,6 +5,7 @@ import {
   Toast,
 } from "@raycast/api";
 import { useCallback, useEffect, useState } from "react";
+import { loadIndicatorColors } from "./components/indicator-color-storage";
 import { Store } from "./core/sqlite";
 import { emptyLibrary, Library } from "./core/model";
 import {
@@ -94,6 +95,7 @@ export function useLibrary(includeHistory = true, todayOnly = false) {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
+      await loadIndicatorColors();
       const start = new Date();
       start.setHours(0, 0, 0, 0);
       setLib(

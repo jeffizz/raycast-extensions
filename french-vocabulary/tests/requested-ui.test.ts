@@ -392,7 +392,7 @@ test("copy and recall spelling put plain answer comparison between title and ful
   assert.ok(spellingDiff("aler", "aller").includes("| aller |\n| aler |"));
 });
 
-test("status uses one icon with a practice ring, not a second status or fake known state", () => {
+test("familiarity icons are independent of practice inclusion and have no ring", () => {
   const w = sample().words[0];
   const svg = () =>
     Buffer.from(statusIcon(w)!.split(",")[1], "base64").toString();
@@ -400,8 +400,7 @@ test("status uses one icon with a practice ring, not a second status or fake kno
   w.familiarity = "unmarked";
   assert.equal(statusIcon(w), undefined);
   w.practice = true;
-  assert.ok(svg().includes("<circle"));
-  assert.ok(!svg().includes("<path"));
+  assert.equal(statusIcon(w), undefined);
   for (const state of ["fuzzy", "known", "unknown"] as const) {
     w.familiarity = state;
     w.practice = false;
@@ -409,7 +408,7 @@ test("status uses one icon with a practice ring, not a second status or fake kno
     assert.ok(plain.includes("<path"));
     assert.ok(!plain.includes("<circle"));
     w.practice = true;
-    assert.ok(svg().includes("<circle"));
+    assert.equal(svg(), plain);
   }
 });
 

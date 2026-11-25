@@ -48,6 +48,7 @@ import {
 import { escapeMD, WordActions, wordMarkdown } from "./components/word";
 import { modeSettings, practiceModes } from "./core/practice-settings";
 import ManageElevenLabsKeys from "./manage-elevenlabs-keys";
+import { IndicatorColorSettings } from "./components/indicator-colors";
 import { AIUsage } from "./ai/usage-view";
 import { AISettings } from "./ai/settings";
 import { AIWorkflow } from "./ai/workflow";
@@ -389,6 +390,22 @@ export default function Dashboard() {
                 title="Open Pronunciation Preferences"
                 icon={Icon.Gear}
                 onAction={openExtensionPreferences}
+              />
+            </ActionPanel>
+          }
+        />
+      </List.Section>
+      <List.Section title="Personalization">
+        <List.Item
+          title="Content Indicator Colours"
+          icon={Icon.Gear}
+          actions={
+            <ActionPanel>
+              <Action
+                title="Configure Colours"
+                onAction={() =>
+                  push(<IndicatorColorSettings onSaved={reload} />)
+                }
               />
             </ActionPanel>
           }

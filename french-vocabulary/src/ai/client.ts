@@ -98,7 +98,11 @@ export async function generate(
     throw Error(
       "Historical retrieval currently requires an OpenAI model supporting Responses web search. Activate OpenAI explicitly in Dashboard; no provider fallback is used.",
     );
-  const dir = join(environment.supportPath, "ai-cache");
+  const dir = join(
+    environment.supportPath,
+    task === "family" ? "ai-family-cache" : "ai-cache",
+  );
+  const retentionDays = task === "family" ? 30 : 7;
   const hash = createHash("sha256")
     .update(
       JSON.stringify([
@@ -121,8 +125,20 @@ export async function generate(
   await mkdir(dir, { recursive: true, mode: 0o700 });
   if (!force) {
     try {
-      const cached = JSON.parse(await readFile(path, "utf8"));
-      if (Date.now() - cached.at < 7 * 86400000)
+      const raw = await readFile(path, "utf8").catch(async (error) => {
+        if (task !== "family") throw error;
+        const legacy = await readFile(
+          join(environment.supportPath, "ai-cache", hash + ".json"),
+          "utf8",
+        );
+        const entry = JSON.parse(legacy);
+        if (Date.now() - entry.at >= retentionDays * 86400000) throw error;
+        await writeFile(path, legacy, { mode: 0o600 });
+        await pruneCache(dir, retentionDays);
+        return legacy;
+      });
+      const cached = JSON.parse(raw);
+      if (Date.now() - cached.at < retentionDays * 86400000)
         return { ...cached.result, cached: true };
     } catch {
       /* A missing or expired cache is a normal miss. */
@@ -152,7 +168,7 @@ export async function generate(
     await writeFile(path, JSON.stringify({ at: Date.now(), result }), {
       mode: 0o600,
     });
-    await pruneCache(dir);
+    await pruneCache(dir, retentionDays);
     return result;
   }
   const gemini = config.provider === "gemini";
@@ -276,10 +292,10 @@ export async function generate(
   await writeFile(path, JSON.stringify({ at: Date.now(), result }), {
     mode: 0o600,
   });
-  await pruneCache(dir);
+  await pruneCache(dir, retentionDays);
   return result;
 }
-async function pruneCache(dir: string) {
+async function pruneCache(dir: string, retentionDays: number) {
   const files = await readdir(dir);
   const ranked = await Promise.all(
     files
@@ -289,7 +305,11 @@ async function pruneCache(dir: string) {
   ranked.sort((a, b) => b.time - a.time);
   await Promise.all(
     ranked
-      .filter((f, i) => i >= 30 || Date.now() - f.time > 7 * 86400000)
+      .filter(
+        (f, i) =>
+          i >= (retentionDays === 30 ? 300 : 30) ||
+          Date.now() - f.time > retentionDays * 86400000,
+      )
       .map((f) => rm(join(dir, f.f), { force: true })),
   );
 }

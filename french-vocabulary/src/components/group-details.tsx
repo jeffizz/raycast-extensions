@@ -21,7 +21,7 @@ import {
   sortedGroupIds,
 } from "../core/group-order";
 import { speakWord, stopSpeech } from "../speech";
-import { statusIcon } from "./status";
+import { statusIcon, statusTooltip } from "./status";
 import { AIWorkflow } from "../ai/workflow";
 
 export function GroupDetails({ groupId }: { groupId: string }) {
@@ -130,16 +130,16 @@ export function GroupDetails({ groupId }: { groupId: string }) {
                 .filter(Boolean)
                 .join(" · ")}
               accessories={[
+                ...(word.archived
+                  ? [{ icon: Icon.Tray, tooltip: "Archived" }]
+                  : []),
                 ...(icon
                   ? [
                       {
                         icon: { source: icon },
-                        tooltip: "Familiarity and practice status",
+                        tooltip: statusTooltip(word),
                       },
                     ]
-                  : []),
-                ...(word.archived
-                  ? [{ icon: Icon.Tray, tooltip: "Archived" }]
                   : []),
               ]}
               actions={

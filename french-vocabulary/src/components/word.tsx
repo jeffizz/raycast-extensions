@@ -44,12 +44,10 @@ export function wordMarkdown(w: Word, _lib?: Library, showIPA = false) {
 export function WordActions({
   word: w,
   refresh,
-  practiceShortcut = true,
   selectedSenseId,
 }: {
   word: Word;
   refresh: () => Promise<void>;
-  practiceShortcut?: boolean;
   selectedSenseId?: string;
 }) {
   const { push } = useNavigation();
@@ -96,9 +94,6 @@ export function WordActions({
       <Action
         title={w.practice ? "Remove from Practice" : "Add to Practice"}
         icon={Icon.CheckCircle}
-        shortcut={
-          practiceShortcut ? { modifiers: ["cmd"], key: "t" } : undefined
-        }
         onAction={() =>
           update((x) => {
             setPractice(x, !x.practice);

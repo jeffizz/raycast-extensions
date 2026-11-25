@@ -40,7 +40,7 @@ import ImportVocabulary from "./import-vocabulary";
 import { PracticeSession } from "./practice";
 import { copyQuestionsInOrder } from "./core/learning";
 import { modeSettings } from "./core/practice-settings";
-import { statusIcon } from "./components/status";
+import { contentAccessories } from "./components/content-status";
 import {
   ProcessingSession,
   startProcessing,
@@ -568,29 +568,12 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
     </ActionPanel.Section>
   );
   const accessories = (w: Word): List.Item.Accessory[] => {
-    const source = statusIcon(w),
-      pos = preferences().listPOS;
+    const pos = preferences().listPOS;
     return [
       ...(!listLayout && pos === "right"
         ? [{ text: w.senses[0]?.pos ?? "" }]
         : []),
-      ...(source
-        ? [
-            {
-              icon: { source },
-              tooltip: [
-                w.practice ? "In practice" : "",
-                w.familiarity === "known"
-                  ? "Know"
-                  : w.familiarity === "fuzzy" || w.familiarity === "unknown"
-                    ? "Fuzzy"
-                    : "",
-              ]
-                .filter(Boolean)
-                .join(" · "),
-            },
-          ]
-        : []),
+      ...contentAccessories(w),
     ];
   };
   return (
@@ -799,7 +782,6 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
                   <WordActions
                     word={w}
                     refresh={safeRefresh}
-                    practiceShortcut={marked.length === 0}
                     selectedSenseId={listLayout ? sense.id : undefined}
                   />
                   <ActionPanel.Section

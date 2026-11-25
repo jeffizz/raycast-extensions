@@ -167,7 +167,7 @@ function FamilyPage({
   useEffect(() => {
     let active = true;
     void Promise.resolve().then(() => {
-      if (active && !links.length) void run();
+      if (active) void run();
     });
     return () => {
       active = false;
@@ -206,7 +206,6 @@ function FamilyPage({
       );
       setLib(await store.load(false));
       setSelected({});
-      setResult(undefined);
       await showToast({
         style: Toast.Style.Success,
         title: "Word Family Saved",

@@ -62,7 +62,7 @@ import { speechWord, Mode, Word, Library } from "./core/model";
 import { autoBackup, preferences, report, store, useLibrary } from "./runtime";
 import { prepareSpeech, speakTexts, speakWord, stopSpeech } from "./speech";
 import { escapeMD } from "./components/word";
-import { statusIcon } from "./components/status";
+import { contentAccessories } from "./components/content-status";
 import {
   translations,
   sessionTranslationLanguage,
@@ -1294,7 +1294,6 @@ function ActivePracticeSession({
           />
           <Action
             title="Remove from Practice"
-            shortcut={{ modifiers: ["cmd"], key: "t" }}
             onAction={() =>
               updateCurrentWord((w) => {
                 w.practice = false;
@@ -1450,12 +1449,6 @@ function ActivePracticeSession({
         .map(({ item, offset, sense, rowId }) => {
           const i = window.start + offset;
           const word = wordUpdates[item.word.id] ?? item.word;
-          const familiarity =
-            word.familiarity === "known"
-              ? "Know"
-              : word.familiarity === "fuzzy" || word.familiarity === "unknown"
-                ? "Fuzzy"
-                : "Unmarked";
           const row = practiceListRow(
             word,
             sense,
@@ -1465,10 +1458,6 @@ function ActivePracticeSession({
             revealed,
             language,
           );
-          const familiarityIcon = statusIcon({
-            ...word,
-            practice: listLayout ? word.practice : false,
-          });
           return (
             <Fragment key={rowId}>
               <List.Item
@@ -1496,14 +1485,7 @@ function ActivePracticeSession({
                         },
                       ]
                     : []),
-                  ...(familiarityIcon
-                    ? [
-                        {
-                          icon: { source: familiarityIcon },
-                          tooltip: `Familiarity: ${familiarity}`,
-                        },
-                      ]
-                    : []),
+                  ...contentAccessories(word),
                 ]}
                 icon={
                   i < index
