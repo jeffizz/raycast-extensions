@@ -1,4 +1,22 @@
 import test from "node:test";
+import { readFileSync } from "node:fs";
+test("candidate rows use hover icons and preserve the original detail preview", () => {
+  const source = readFileSync(
+    new URL("../src/ai/workflow.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.ok(!source.includes('"Add / Save"'));
+  assert.ok(source.includes('tooltip: "Possible Overlap"'));
+  assert.ok(source.includes('tooltip: "Already Covered"'));
+  assert.ok(!source.includes("## Save Action"));
+  assert.ok(source.includes("## Existing Match"));
+  const family = readFileSync(
+    new URL("../src/ai/family-view.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.ok(family.includes("tooltip: linked"));
+  assert.ok(!family.includes("text: linked"));
+});
 import assert from "node:assert/strict";
 import { newWord } from "../src/core/model";
 import { candidateSense, parseCandidates, instruction } from "../src/ai/core";

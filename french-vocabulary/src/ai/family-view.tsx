@@ -364,7 +364,15 @@ function FamilyPage({
                 subtitle={c.pos + " · " + c.zh}
                 accessories={[
                   {
-                    text: linked
+                    icon: linked
+                      ? {
+                          source: Icon.Checkmark,
+                          tintColor: Color.SecondaryText,
+                        }
+                      : matches.length
+                        ? Icon.Info
+                        : Icon.Plus,
+                    tooltip: linked
                       ? "Already Linked"
                       : matches.length
                         ? "Already in Library · Link Only"

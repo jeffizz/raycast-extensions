@@ -611,7 +611,7 @@ function CandidateReview({
               id={"existing-" + s.id}
               title={s.zh || s.en}
               subtitle={s.pos}
-              accessories={[{ text: "Existing" }]}
+              accessories={[{ icon: Icon.Info, tooltip: "Existing Sense" }]}
               detail={<List.Item.Detail markdown={sensePreview(spelling, s)} />}
               actions={<ActionPanel>{common}</ActionPanel>}
             />
@@ -640,25 +640,36 @@ function CandidateReview({
                     ? Icon.Checkmark
                     : Icon.Circle
               }
-              accessories={[
-                {
-                  text: covered(c, i)
-                    ? "Already Covered"
-                    : matchFor(c)?.status === "overlap"
-                      ? "Possible Overlap"
-                      : "",
-                },
-              ]}
-              subtitle={
-                task === "senses" &&
-                separatePronominal &&
-                c.headword &&
-                /^(se\s|s['’])/i.test(c.headword) &&
-                c.headword !== spelling
-                  ? "Save to " + c.headword
-                  : targets[i]
-                    ? "Replace existing sense"
-                    : "Add / Save"
+              accessories={
+                targets[i]
+                  ? [{ icon: Icon.Pencil, tooltip: "Replace existing sense" }]
+                  : task === "senses" &&
+                      separatePronominal &&
+                      c.headword &&
+                      /^(se\s|s['’])/i.test(c.headword) &&
+                      c.headword !== spelling
+                    ? [{ icon: Icon.Plus, tooltip: "Save to " + c.headword }]
+                    : covered(c, i)
+                      ? [
+                          {
+                            icon: {
+                              source: Icon.Checkmark,
+                              tintColor: Color.SecondaryText,
+                            },
+                            tooltip: "Already Covered",
+                          },
+                        ]
+                      : matchFor(c)?.status === "overlap"
+                        ? [
+                            {
+                              icon: {
+                                source: Icon.Info,
+                                tintColor: Color.Orange,
+                              },
+                              tooltip: "Possible Overlap",
+                            },
+                          ]
+                        : []
               }
               detail={
                 <List.Item.Detail
