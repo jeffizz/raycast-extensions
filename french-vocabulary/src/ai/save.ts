@@ -118,6 +118,10 @@ export function saveAI(
           zh: item.zh!,
           en: item.en!,
           source,
+          onset:
+            word!.senses[index].onset === "unknown"
+              ? candidateSense(item).onset
+              : word!.senses[index].onset,
         };
       } else {
         const sense = { ...candidateSense(item), source };

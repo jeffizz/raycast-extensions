@@ -15,6 +15,7 @@ import { Store, readSQLiteBackup } from "../src/core/sqlite";
 import { baseline, makeDelta, applyDelta } from "../src/core/delta";
 const candidate = {
   headword: "lavage",
+  onset: "consonant",
   pos: "n.m.",
   ipa: "la.vaʒ",
   zh: "清洗",

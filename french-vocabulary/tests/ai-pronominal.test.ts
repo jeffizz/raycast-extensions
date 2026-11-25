@@ -3,6 +3,62 @@ import assert from "node:assert/strict";
 import { emptyLibrary, validateLibrary } from "../src/core/model";
 import { saveAI } from "../src/ai/save";
 import { parseCandidates } from "../src/ai/core";
+test("AI onset is validated, persisted and only fills unknown onset on updates", () => {
+  const noun = {
+    pos: "n.m.",
+    ipa: "a.mi",
+    zh: "朋友",
+    en: "friend",
+    onset: "vowel",
+  };
+  for (const task of ["senses", "family"] as const) {
+    const item = { ...noun, headword: "ami", text: "Related word" };
+    assert.equal(
+      parseCandidates(JSON.stringify({ items: [item] }), task)[0].onset,
+      "vowel",
+    );
+    assert.throws(
+      () =>
+        parseCandidates(
+          JSON.stringify({ items: [{ ...item, onset: "invalid" }] }),
+          task,
+        ),
+      /Invalid onset/,
+    );
+    assert.equal(
+      parseCandidates(
+        JSON.stringify({ items: [{ ...item, onset: undefined }] }),
+        task,
+      )[0].onset,
+      "unknown",
+    );
+  }
+  const lib = emptyLibrary();
+  saveAI(lib, { spelling: "ami", task: "senses", items: [noun], targets: [] });
+  const word = lib.words[0],
+    id = word.senses[0].id;
+  assert.equal(word.senses[0].gender, "m");
+  assert.equal(word.senses[0].onset, "vowel");
+  saveAI(lib, {
+    word: structuredClone(word),
+    spelling: "ami",
+    task: "senses",
+    items: [{ ...noun, onset: "consonant" }],
+    targets: [id],
+  });
+  assert.equal(word.senses[0].onset, "vowel");
+  word.senses[0].onset = "unknown";
+  saveAI(lib, {
+    word: structuredClone(word),
+    spelling: "ami",
+    task: "senses",
+    items: [noun],
+    targets: [id],
+  });
+  assert.equal(word.senses[0].onset, "vowel");
+  assert.equal(word.senses[0].id, id);
+  validateLibrary(lib);
+});
 const ordinary = { pos: "v.t.", ipa: "la.ve", zh: "洗", en: "wash" };
 const reflexive = {
   ...ordinary,

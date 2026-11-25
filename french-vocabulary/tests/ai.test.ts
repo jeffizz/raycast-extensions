@@ -36,7 +36,7 @@ test("clipboard screen blocks typical secrets and accepts French phrases", () =>
 test("AI candidates enforce field, size and count bounds", () => {
   assert.deepEqual(
     parseCandidates(JSON.stringify({ items: [item] }), "senses"),
-    [item],
+    [{ ...item, onset: "unknown" }],
   );
   assert.throws(() => parseCandidates('{"items":[]}', "senses"));
   assert.throws(() =>

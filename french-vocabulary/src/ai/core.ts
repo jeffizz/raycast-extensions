@@ -1,4 +1,4 @@
-import { inferSense, Sense, uid } from "../core/model";
+import { inferSense, isNoun, Onset, Sense, uid } from "../core/model";
 export const providers = {
   openai: "OpenAI",
   gemini: "Gemini",
@@ -16,6 +16,7 @@ export type Task =
   | "catalog"
   | "family";
 export type Candidate = {
+  onset?: string;
   match?: string;
   existingRef?: string;
   headword?: string;
@@ -100,8 +101,21 @@ export function parseCandidates(raw: string, task: Task): Candidate[] {
       if (typeof item.existingRef === "string")
         result.existingRef = item.existingRef;
     }
+    if (task === "senses" || task === "family")
+      result.onset = candidateOnset(item.onset);
     return result;
   });
+}
+export function candidateOnset(value: unknown): Onset {
+  if (value === undefined) return "unknown";
+  if (
+    typeof value !== "string" ||
+    !["vowel", "consonant", "mute-h", "aspirated-h", "unknown"].includes(value)
+  )
+    throw Error(
+      "Invalid onset: expected vowel, consonant, mute-h, aspirated-h or unknown.",
+    );
+  return value as Onset;
 }
 export function candidateSense(c: Candidate, id: string = uid()): Sense {
   if (!c.pos || !c.ipa || !c.zh || !c.en)
@@ -113,6 +127,7 @@ export function candidateSense(c: Candidate, id: string = uid()): Sense {
     zh: c.zh,
     en: c.en,
     ...inferSense(c.pos),
+    onset: isNoun(c.pos) ? candidateOnset(c.onset) : "unknown",
   };
 }
 export function instruction(task: Task) {
@@ -151,6 +166,9 @@ export function instruction(task: Task) {
     format +
     ". " +
     goal +
+    (task === "senses" || task === "family"
+      ? ' For each noun candidate also return onset: "vowel", "consonant", "mute-h", "aspirated-h", or "unknown", describing the headword onset for French article elision. Distinguish mute h from aspirated h using lexical knowledge, never the letter h alone or IPA alone. Return unknown when uncertain. For non-nouns return unknown. Gender remains expressed through standard POS such as n.m. or n.f.; no separate gender field is needed.'
+      : "") +
     (["senses", "examples", "collocations"].includes(task)
       ? ' Generation is the primary task; duplicate assessment is secondary. First independently identify useful common candidates from your French vocabulary knowledge, then annotate each against existingContent. existingContent is only a comparison baseline, NOT an exhaustive dictionary, a whitelist, or a list to copy. Select candidates solely for commonness, core relevance and accuracy, never for novelty or difference from existingContent. It is completely valid for every returned candidate to match existing content. Do not suppress a common core sense or construction because it already exists, and do not seek obscure alternatives to produce new items. Independently formulate clear, precise definitions and natural examples; correct imprecise or mixed local wording rather than mechanically copying it. Identical wording is acceptable when it is already accurate; do not paraphrase merely to appear different. Preserve distinct core meanings even when an existing gloss mixes them. For collocations, return the most common useful constructions for the target sense regardless of whether they are already saved. Never invent meanings or constructions or pad the count. For each item also return match ("equivalent", "overlap", or "new") and existingRef (the exact ref from existingContent, omitted for new). Equivalent requires near-certain semantic identity, not merely similar translations. Broad or mixed existing senses, uncertain matches and partial overlap must be overlap. Same English gloss alone does not establish equivalence. Collocations: equivalent means the same abstract construction despite placeholder wording or different examples. Examples: only identical sentences or tiny rewrites are equivalent, not different sentences expressing the same idea. Never invent references. Compare only existingContent supplied as data; no extra tool calls.'
       : "")

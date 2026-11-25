@@ -102,7 +102,11 @@ export async function generate(
   const hash = createHash("sha256")
     .update(
       JSON.stringify([
-        ["senses", "collocations", "examples"].includes(task) ? 10 : 6,
+        task === "senses" || task === "family"
+          ? 11
+          : ["collocations", "examples"].includes(task)
+            ? 10
+            : 6,
         config.connection ?? "api",
         config.cliPath ?? "",
         config.provider,
