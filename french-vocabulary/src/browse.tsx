@@ -11,10 +11,11 @@ import {
   showToast,
   Toast,
 } from "@raycast/api";
-import { CollectionPicker, ManageCollections } from "./components/collections";
+import { ManageCollections } from "./components/collections";
+import { mixedCollectionMembership } from "./core/collection-membership";
+import { CollectionMembershipEditor } from "./components/collection-membership";
 import {
   collections,
-  changeCollectionMembers,
   collectionSelectionIds,
   collectionSelectionKey,
   collectionSelectionMembers,
@@ -97,9 +98,6 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
   };
   const [searchWithinFilters, setSearchWithinFilters] = useState(false);
 
-  const selectedCollection = collections(lib).find(
-    (c) => c.id === collectionId,
-  );
   useEffect(() => {
     if (
       !loading &&
@@ -117,71 +115,24 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
   const collectionActions = () => (
     <ActionPanel.Section title="Collections">
       <Action
-        title={`Collections: ${collectionSelectionLabel(lib, collectionId)}`}
-        onAction={() =>
-          push(
-            <CollectionPicker
-              selected={collectionId}
-              onSelect={async (id) => {
-                await safeRefresh();
-                setCollectionId(id);
-                setProcessing(false);
-                setMarked([]);
-                setSelection(undefined);
-              }}
-            />,
-          )
-        }
-      />
-      <Action
         title="Manage Collections"
         onAction={() => push(<ManageCollections onChanged={safeRefresh} />)}
       />
-      <Action
-        title={
-          marked.length
-            ? "Add Selection to Collection"
-            : "Add Word to Collection"
-        }
-        onAction={() =>
-          push(
-            <CollectionPicker
-              allowAll={false}
-              onSelect={async (id) => {
-                const ids = marked.length ? marked : activeId ? [activeId] : [];
-                await store.mutate((lib) =>
-                  changeCollectionMembers(lib, id, ids, true),
-                );
-                await safeRefresh();
-                void autoBackup();
-              }}
-            />,
-          )
-        }
-      />
-      {selectedCollection && (
+      {(marked.length > 0 || activeId) && (
         <Action
           title={
-            marked.length
-              ? "Remove Selection from Collection"
-              : "Remove Word from Collection"
+            mixedMembership ? "Add to Collections…" : "Edit Word Collections…"
           }
-          onAction={async () => {
-            try {
-              await store.mutate((lib) =>
-                changeCollectionMembers(
-                  lib,
-                  collectionId,
-                  marked.length ? marked : activeId ? [activeId] : [],
-                  false,
-                ),
-              );
-              await safeRefresh();
-              void autoBackup();
-            } catch (error) {
-              await report(error);
-            }
-          }}
+          onAction={() =>
+            push(
+              <CollectionMembershipEditor
+                library={lib}
+                ids={marked.length ? marked : activeId ? [activeId] : []}
+                onSaved={safeRefresh}
+                addOnly={mixedMembership}
+              />,
+            )
+          }
         />
       )}
     </ActionPanel.Section>
@@ -434,6 +385,10 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
   const rowById = useMemo(
     () => new Map(rows.map((row) => [row.id, row])),
     [rows],
+  );
+  const mixedMembership = useMemo(
+    () => mixedCollectionMembership(lib.settings?.collections ?? [], marked),
+    [lib.settings?.collections, marked],
   );
   const activeRowId =
     selectedRow && rowById.get(selectedRow)?.word.id === activeId
