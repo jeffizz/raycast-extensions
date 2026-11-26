@@ -124,6 +124,51 @@ test("batch matching collects exact and annotated forms without changing records
   assert.equal(word.familyLinks![0].targetWordId, variant.id);
   assert.equal(variant.word, "suivant(e)");
 });
+test("complete irregular annotations match existing senses without permitting duplicate creation", () => {
+  const { lib, word, senseId } = sample();
+  const incoming = { ...candidate, headword: "nouveau", pos: "adj." };
+  const existing = newWord("nouveau(nouvelle)", candidateSense(incoming));
+  lib.words.push(existing);
+  for (const spelling of [
+    "nouveau(nouvelle)",
+    "NOUVEAU（nouvelle）",
+    "nouveau(nouvelle)(s)",
+    "nouveau(nouvelle),s",
+  ])
+    assert.equal(familyMatchKey(spelling), "nouveau");
+  assert.equal(familyMatchKey("beau(belle)"), "beau");
+  for (const spelling of [
+    "nouveau(sens)",
+    "nouveau(nouvelle)(note)",
+    "mot(autre)",
+    "renouveler(se)",
+  ])
+    assert.equal(familyMatchKey(spelling), familyKey(spelling));
+  assert.deepEqual(familyMatches(lib, "nouveau"), [existing]);
+  assert.equal(
+    compatibleFamilySenses(existing, "adj.")[0].id,
+    existing.senses[0].id,
+  );
+  assert.throws(
+    () => saveFamily(lib, word, senseId, [{ candidate: incoming }], source),
+    /now exists/,
+  );
+  saveFamily(
+    lib,
+    word,
+    senseId,
+    [
+      {
+        candidate: incoming,
+        existingId: existing.id,
+        targetSenseId: existing.senses[0].id,
+      },
+    ],
+    source,
+  );
+  assert.equal(word.familyLinks![0].targetWordId, existing.id);
+  assert.equal(existing.word, "nouveau(nouvelle)");
+});
 test("batch matching retains only requested hits across repeated large-library scans", () => {
   const { lib } = sample();
   const template = lib.words[0];

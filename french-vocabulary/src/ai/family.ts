@@ -12,12 +12,33 @@ import { Candidate, candidateSense, safeVocabulary } from "./core";
 
 export const familyKey = (word: string) =>
   canonical(word).toLocaleLowerCase("fr");
+// Explicit irregular full forms only; arbitrary parenthetical text is not a variant.
+const fullFamilyVariants: Readonly<Record<string, readonly string[]>> = {
+  nouveau: ["nouvelle", "nouvel"],
+  beau: ["belle", "bel"],
+  vieux: ["vieille", "vieil"],
+  fou: ["folle", "fol"],
+  mou: ["molle", "mol"],
+};
 // Matching only: never rewrite imported spellings or generate all inflected forms.
 export function familyMatchKey(word: string) {
   const exact = familyKey(word);
   const base = exact
     .replace(/（/g, "(")
     .replace(/）/g, ")")
+    .replace(
+      /^([\p{L}\p{M}]+)((?:\([\p{L}\p{M}]+\))+)(?=(?:[,，]\s*(?:es|e|s))*$)/u,
+      (annotation, head: string, forms: string) => {
+        const variants = forms.slice(1, -1).split(")(");
+        return variants.every(
+          (form) =>
+            fullFamilyVariants[head]?.includes(form) ||
+            ["e", "s", "es"].includes(form),
+        )
+          ? head
+          : annotation;
+      },
+    )
     .replace(/\((?:e|es|s)\)(?=\(|[,，]|\s|$)/gu, "")
     .replace(/(?:[,，]\s*(?:es|e|s))+$/u, "");
   return /[(),，（）]/u.test(base) ? exact : base;
