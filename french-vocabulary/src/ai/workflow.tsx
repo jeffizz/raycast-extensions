@@ -31,7 +31,8 @@ import {
   AIResult,
 } from "./client";
 import {
-  duplicateContext,
+  generationInput,
+  existingForSense,
   candidateMatch,
   sameSenseHeadword,
 } from "./duplicates";
@@ -53,10 +54,27 @@ export function AIWordActions({
 }) {
   const { push } = useNavigation();
   return (
-    <>
+    <ActionPanel.Submenu title="AI Vocabulary" icon={Icon.Stars}>
+      {(["senses", "examples", "mnemonic", "collocations"] as Task[]).map(
+        (task) => (
+          <Action
+            key={task}
+            title={task[0].toUpperCase() + task.slice(1)}
+            onAction={() =>
+              push(
+                <AIWorkflow
+                  word={word}
+                  task={task}
+                  onSaved={onSaved}
+                  selectedSenseId={selectedSenseId}
+                />,
+              )
+            }
+          />
+        ),
+      )}
       <Action
         title="Word Family"
-        icon={Icon.List}
         onAction={() =>
           push(
             <WordFamily
@@ -67,38 +85,16 @@ export function AIWordActions({
           )
         }
       />
-      <ActionPanel.Submenu title="AI Vocabulary" icon={Icon.Stars}>
-        {(["senses", "examples", "mnemonic", "collocations"] as Task[]).map(
-          (task) => (
-            <Action
-              key={task}
-              title={
-                "Generate " + task[0].toUpperCase() + task.slice(1) + " with AI"
-              }
-              onAction={() =>
-                push(
-                  <AIWorkflow
-                    word={word}
-                    task={task}
-                    onSaved={onSaved}
-                    selectedSenseId={selectedSenseId}
-                  />,
-                )
-              }
-            />
-          ),
-        )}
-        {allowChat && (
-          <Action
-            title="Chat About This Word"
-            onAction={() => {
-              stopSpeech();
-              push(<WordChatView word={word} senseId={selectedSenseId} />);
-            }}
-          />
-        )}
-      </ActionPanel.Submenu>
-    </>
+      {allowChat && (
+        <Action
+          title="Chat About This Word"
+          onAction={() => {
+            stopSpeech();
+            push(<WordChatView word={word} senseId={selectedSenseId} />);
+          }}
+        />
+      )}
+    </ActionPanel.Submenu>
   );
 }
 export function AIWorkflow({
@@ -199,16 +195,9 @@ function GenerateForm({
         throw Error(
           "Enter a short vocabulary word or phrase, not private information.",
         );
-      const selected = word?.senses.filter(
-        (s) => task === "senses" || s.id === values.sense,
-      );
       const input = group
         ? comparisonInput(data.lib.words, values.members ?? [])
-        : JSON.stringify({
-            word: spelling,
-            existingContent: duplicateContext(word, task, values.sense),
-            senses: selected?.map(({ pos, zh, en }) => ({ pos, zh, en })),
-          });
+        : generationInput(spelling, word, task, values.sense, searchSources);
       setBusy(true);
       controller.current = new AbortController();
       const result = await generate(
@@ -359,7 +348,7 @@ function GenerateForm({
             : providers[data.config.provider]) +
           " · Model: " +
           data.config.model +
-          ". Generate Candidates sends the displayed word and selected meanings and may incur charges. No learning history or notes are sent. Clipboard screening cannot identify every secret."
+          ". Generate Candidates sends the displayed word and selected meanings and may incur charges. Only task-relevant existing content is included for comparison; no learning history or general notes are sent. Clipboard screening cannot identify every secret."
         }
       />
       {word ? (
@@ -588,6 +577,7 @@ function CandidateReview({
       />
     </>
   );
+  const existing = existingContentPreview(word, task, senseId);
   return (
     <List
       isLoading={busy}
@@ -613,13 +603,21 @@ function CandidateReview({
           ))}
         </List.Section>
       )}
-      <List.Section
-        title={
-          task === "senses"
-            ? "AI Candidates"
-            : "Usage: " + result.usage.slice(0, 180)
-        }
-      >
+      {existing && (
+        <List.Section title={existing.title}>
+          {existing.rows.map(({ id, title, subtitle, markdown }) => (
+            <List.Item
+              key={id}
+              id={`existing-${id}`}
+              title={title}
+              subtitle={subtitle}
+              detail={<List.Item.Detail markdown={markdown} />}
+              actions={<ActionPanel>{common}</ActionPanel>}
+            />
+          ))}
+        </List.Section>
+      )}
+      <List.Section title="AI Candidates">
         {items
           .map((c, i) => ({ c, i }))
           .sort((a, b) => Number(covered(a.c, a.i)) - Number(covered(b.c, b.i)))
@@ -627,7 +625,15 @@ function CandidateReview({
             <List.Item
               key={i}
               id={String(i)}
-              title={c.pattern ?? c.zh ?? c.french ?? "Suggestion " + (i + 1)}
+              title={
+                c.pattern ??
+                c.zh ??
+                c.french ??
+                (task === "mnemonic"
+                  ? c.text?.replace(/\s+/g, " ").slice(0, 100)
+                  : undefined) ??
+                "Suggestion " + (i + 1)
+              }
               icon={
                 covered(c, i)
                   ? { source: Icon.Checkmark, tintColor: Color.SecondaryText }
@@ -644,7 +650,7 @@ function CandidateReview({
                       /^(se\s|s['’])/i.test(c.headword) &&
                       !sameSenseHeadword(c.headword, spelling)
                     ? [{ icon: Icon.Plus, tooltip: "Save to " + c.headword }]
-                    : covered(c, i)
+                    : matchFor(c)?.status === "equivalent"
                       ? [
                           {
                             icon: {
@@ -680,7 +686,7 @@ function CandidateReview({
                     (matchFor(c)
                       ? "\n\n## Existing Match\n\n" +
                         md(matchFor(c)!.summary) +
-                        "\n\nAI assessment; verify before updating."
+                        "\n\nReview the match before saving."
                       : "") +
                     (targets[i]
                       ? "\n\n## Existing Sense\n\n" +
@@ -782,6 +788,57 @@ function CandidateReview({
     </List>
   );
 }
+function existingContentPreview(
+  word: Word | undefined,
+  task: Task,
+  senseId?: string,
+) {
+  if (!word) return;
+  type Row = { id: string; title: string; subtitle?: string; markdown: string };
+  let title: string;
+  let rows: Row[];
+  if (task === "examples") {
+    title = "Existing Examples";
+    rows = existingForSense(word.examples, senseId).map((item) => ({
+      id: item.id,
+      title: item.french,
+      subtitle: item.senseId ? undefined : "Word-Level",
+      markdown: [md(item.french), md(item.translation)]
+        .filter(Boolean)
+        .join("\n\n"),
+    }));
+  } else if (task === "collocations") {
+    title = "Existing Collocations";
+    rows = existingForSense(word.collocationEntries ?? [], senseId).map(
+      (item) => ({
+        id: `collocation-${item.id}`,
+        title: item.pattern,
+        subtitle: item.senseId ? undefined : "Word-Level",
+        markdown: [
+          `### ${md(item.pattern)}`,
+          md(item.meaning),
+          md(item.french),
+          md(item.translation),
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
+      }),
+    );
+    if (word.collocations?.trim())
+      rows.push({
+        id: "legacy",
+        title: "Legacy Collocations",
+        markdown: word.collocations,
+      });
+  } else if (task === "mnemonic") {
+    title = "Existing Mnemonic";
+    rows = word.mnemonic?.trim()
+      ? [{ id: "mnemonic", title: "Saved Mnemonic", markdown: word.mnemonic }]
+      : [];
+  } else return;
+  return rows.length ? { title, rows } : undefined;
+}
+
 function sensePreview(spelling: string, sense: Candidate) {
   return `# ${md(spelling)}\n\n/${md((sense.ipa ?? "").replaceAll("/", ""))}/\n\n(${md(sense.pos ?? "")})\n\n${md(sense.zh ?? "")}\n\n${md(sense.en ?? "")}`;
 }
@@ -798,7 +855,10 @@ function EditCandidate({
     initialValues: item as Record<string, string>,
     onSubmit: async (values) => {
       try {
-        onSave(parseCandidates(JSON.stringify({ items: [values] }), task)[0]);
+        const edited = { ...values };
+        delete edited.match;
+        delete edited.existingRef;
+        onSave(parseCandidates(JSON.stringify({ items: [edited] }), task)[0]);
       } catch (e) {
         await report(e);
       }

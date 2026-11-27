@@ -115,7 +115,9 @@ test("family cache capacity and shared rendering remain wired correctly", () => 
     client = read("ai/client.ts");
   assert.ok(family.includes("if (active) void run()"));
   assert.ok(!family.includes("setResult(undefined)"));
-  assert.ok(client.includes('task === "family" ? 30 : 7'));
+  assert.ok(client.includes('task === "family" || independent ? 30 : 7'));
+  assert.ok(client.includes('"ai-family-cache"'));
+  assert.ok(client.includes('"ai-usage-cache"'));
   assert.ok(client.includes("retentionDays === 30 ? 300 : 30"));
   for (const path of ["browse.tsx", "practice.tsx"]) {
     const source = read(path);

@@ -98,18 +98,23 @@ export async function generate(
     throw Error(
       "Historical retrieval currently requires an OpenAI model supporting Responses web search. Activate OpenAI explicitly in Dashboard; no provider fallback is used.",
     );
+  const independent = task === "examples" || task === "collocations";
   const dir = join(
     environment.supportPath,
-    task === "family" ? "ai-family-cache" : "ai-cache",
+    task === "family"
+      ? "ai-family-cache"
+      : independent
+        ? "ai-usage-cache"
+        : "ai-cache",
   );
-  const retentionDays = task === "family" ? 30 : 7;
+  const retentionDays = task === "family" || independent ? 30 : 7;
   const hash = createHash("sha256")
     .update(
       JSON.stringify([
         task === "senses" || task === "family" || task === "comparison"
           ? 11
-          : ["collocations", "examples"].includes(task)
-            ? 10
+          : independent
+            ? 12
             : 6,
         config.connection ?? "api",
         config.cliPath ?? "",

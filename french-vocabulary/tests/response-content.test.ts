@@ -92,7 +92,7 @@ test("truncation and refusals have explicit safe errors and never accept partial
     /blocked or refused/,
   );
 });
-test("thinking override is DeepSeek-only and word family precedes the AI submenu", () => {
+test("thinking override is DeepSeek-only and Word Family is inside the AI submenu", () => {
   assert.deepEqual(vocabularyRequestOptions("deepseek"), {
     thinking: { type: "disabled" },
   });
@@ -106,8 +106,11 @@ test("thinking override is DeepSeek-only and word family precedes the AI submenu
     src.indexOf("export function AIWordActions"),
     src.indexOf("export function AIWorkflow"),
   );
-  assert.ok(
-    actions.indexOf('title="Word Family"') <
-      actions.indexOf('<ActionPanel.Submenu title="AI Vocabulary"'),
-  );
+  const submenu = actions.indexOf('<ActionPanel.Submenu title="AI Vocabulary"');
+  const family = actions.indexOf('title="Word Family"');
+  const chat = actions.indexOf('title="Chat About This Word"');
+  assert.ok(submenu >= 0 && submenu < family && family < chat);
+  assert.doesNotMatch(actions.slice(family, chat), /icon=/);
+  assert.doesNotMatch(actions, /with AI|Generate /);
+  assert.ok(actions.includes('["senses", "examples", "mnemonic", "collocations"]'));
 });

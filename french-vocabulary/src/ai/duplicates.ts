@@ -34,6 +34,17 @@ export function sameSenseHeadword(left: string, right: string) {
   );
 }
 
+export function existingForSense<T extends { senseId?: string }>(
+  entries: readonly T[],
+  senseId?: string,
+) {
+  if (!senseId) return entries.filter((entry) => !entry.senseId);
+  return [
+    ...entries.filter((entry) => entry.senseId === senseId),
+    ...entries.filter((entry) => !entry.senseId),
+  ];
+}
+
 export function duplicateContext(
   word: Word | undefined,
   task: Task,
@@ -44,14 +55,18 @@ export function duplicateContext(
     task === "senses"
       ? word.senses.map((s) => ({ pos: s.pos, zh: s.zh, en: s.en }))
       : task === "collocations"
-        ? (word.collocationEntries ?? [])
-            .filter((e) => e.senseId === senseId)
-            .map((e) => ({ pattern: e.pattern, meaning: e.meaning }))
+        ? existingForSense(word.collocationEntries ?? [], senseId).map((e) => ({
+            pattern: e.pattern,
+            meaning: e.meaning,
+          }))
         : task === "examples"
-          ? word.examples
-              .filter((e) => e.senseId === senseId)
-              .map((e) => ({ french: e.french, translation: e.translation }))
-          : [];
+          ? existingForSense(word.examples, senseId).map((e) => ({
+              french: e.french,
+              translation: e.translation,
+            }))
+          : task === "mnemonic" && word.mnemonic?.trim()
+            ? [{ text: word.mnemonic }]
+            : [];
   // Temporary indices refer only to this bounded snapshot, never library IDs.
   return rows
     .slice(0, 32)
@@ -62,12 +77,95 @@ export function duplicateContext(
       ]),
     );
 }
+export function generationInput(
+  spelling: string,
+  word: Word | undefined,
+  task: Task,
+  senseId: string,
+  searchSources: boolean,
+) {
+  const senses = word?.senses
+    .filter((sense) => task === "senses" || sense.id === senseId)
+    .map(({ pos, zh, en }) => ({ pos, zh, en }));
+  if (task === "examples" || task === "collocations")
+    return JSON.stringify({ word: spelling, senses });
+  return JSON.stringify({
+    word: spelling,
+    existingContent:
+      task === "mnemonic" && searchSources
+        ? []
+        : duplicateContext(word, task, senseId),
+    senses,
+  });
+}
+
+const phraseKey = (value: string) =>
+  key(value)
+    .replace(/[’‘]/g, "'")
+    .replace(/\s*([.!?。！？]+)$/u, "")
+    .trim();
+
+const patternKey = (value: string) =>
+  phraseKey(value)
+    .replace(/\bquelque chose\b/gu, "qch")
+    .replace(/\bquelqu'un\b/gu, "qn")
+    .replace(/\binfinitif\b/gu, "inf")
+    .replace(/\s*\+\s*/gu, " ");
+
+function localUsageMatch(
+  c: Candidate,
+  word: Word | undefined,
+  task: "examples" | "collocations",
+  senseId?: string,
+) {
+  if (!word) return;
+  const examples = task === "examples";
+  const normalize = examples ? phraseKey : patternKey;
+  const target = normalize((examples ? c.french : c.pattern) ?? "");
+  if (!target) return;
+  const gloss = phraseKey((examples ? c.translation : c.meaning) ?? "");
+  const rows = examples
+    ? existingForSense(word.examples, senseId).map((e) => ({
+        phrase: e.french,
+        gloss: e.translation,
+        preposition: "",
+      }))
+    : existingForSense(word.collocationEntries ?? [], senseId).map((e) => ({
+        phrase: e.pattern,
+        gloss: e.meaning,
+        preposition: e.preposition ?? "",
+      }));
+  let overlap:
+    | { status: "overlap"; senseId?: undefined; ref: string; summary: string }
+    | undefined;
+  for (const [index, row] of rows.entries()) {
+    const samePhrase = normalize(row.phrase) === target;
+    const conflictingPreposition =
+      !examples &&
+      row.preposition.trim() &&
+      c.preposition?.trim() &&
+      key(row.preposition) !== key(c.preposition);
+    const match = {
+      senseId: undefined,
+      ref: String(index),
+      summary: [row.phrase, row.gloss].filter(Boolean).join(" · "),
+    };
+    if (samePhrase && !conflictingPreposition)
+      return { ...match, status: "equivalent" as const };
+    if (samePhrase || (gloss && phraseKey(row.gloss) === gloss))
+      overlap ??= { ...match, status: "overlap" };
+  }
+  return overlap;
+}
+
 export function candidateMatch(
   c: Candidate,
   word: Word | undefined,
   task: Task,
   senseId?: string,
 ) {
+  if (task === "examples" || task === "collocations")
+    return localUsageMatch(c, word, task, senseId);
   const rows = duplicateContext(word, task, senseId);
   if (
     task === "senses" &&
@@ -82,11 +180,9 @@ export function candidateMatch(
       ? key(r.pos) === key(c.pos ?? "") &&
         key(senses[Number(r.ref)].zh) === key(c.zh ?? "") &&
         key(senses[Number(r.ref)].en) === key(c.en ?? "")
-      : task === "collocations"
-        ? key(r.pattern) === key(c.pattern ?? "")
-        : task === "examples"
-          ? key(r.french) === key(c.french ?? "")
-          : false,
+      : task === "mnemonic" &&
+        !!word?.mnemonic?.trim() &&
+        key(word.mnemonic) === key(c.text ?? ""),
   );
   const advised = ["equivalent", "overlap"].includes(c.match ?? "")
     ? rows.find((r) => r.ref === c.existingRef)

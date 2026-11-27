@@ -135,8 +135,11 @@ Raycast's approximately 100 MB extension heap limit is a practical constraint.
 - API model setup/refresh fetches a catalog and uses local assessment; it must not automatically pay for AI analysis.
 - Codex runs independent, ephemeral, isolated tasks through the existing adapter with cancellation/time/output bounds.
   Preserve its tool/network/config restrictions. API retry is explicit and never a silent fallback.
-- Word Family is outside and immediately before AI Vocabulary. Show saved links AND cached/generated candidates.
-  Cache is on disk: Word Family 30 days / 300 entries; other generation tasks retain their own limits.
+- Word Family is inside AI Vocabulary, immediately before Chat About This Word. Show saved links and cached/generated candidates.
+  Example, collocation and mnemonic review shows saved content separately from AI candidates.
+  Word Family has its own 30-day / 300-entry disk cache. Examples and collocations share a separate
+  30-day / 300-entry disk cache, generated from the word and selected sense without saved content.
+  Compare those candidates locally against current entries; Senses and Mnemonic keep their existing policy.
 - Existing Word Family headwords (including archived records) allow linking only to a compatible specific sense,
   not adding/replacing senses or linking a mismatched POS. Same-batch genuinely new heads can share multiple senses.
 - Variant matching is conservative: recognize supported suffix annotations and explicit complete variants such as

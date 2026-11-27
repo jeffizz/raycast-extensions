@@ -20,12 +20,16 @@ test("candidate rows use hover icons and preserve the original detail preview", 
 import assert from "node:assert/strict";
 import { emptyLibrary, newWord } from "../src/core/model";
 import { candidateSense, parseCandidates, instruction } from "../src/ai/core";
-import { duplicateContext, candidateMatch } from "../src/ai/duplicates";
+import {
+  duplicateContext,
+  candidateMatch,
+  generationInput,
+} from "../src/ai/duplicates";
 import { saveAI } from "../src/ai/save";
 const base = { pos: "n.m.", ipa: "pla", zh: "菜肴，盘", en: "dish" };
 const word = () => newWord("plat", candidateSense(base));
 test("discovery remains primary and mixed matched/new results are preserved", () => {
-  for (const task of ["senses", "collocations", "examples"] as const) {
+  for (const task of ["senses", "mnemonic"] as const) {
     assert.match(instruction(task), /Generation is the primary task/);
     assert.match(instruction(task), /NOT an exhaustive dictionary/);
     assert.match(instruction(task), /never for novelty/);
@@ -61,7 +65,8 @@ test("discovery remains primary and mixed matched/new results are preserved", ()
     "collocations",
   );
   assert.equal(collocations.length, 2);
-  assert.equal(collocations[1].match, "new");
+  assert.equal(collocations[0].existingRef, undefined);
+  assert.equal(collocations[1].match, undefined);
 });
 test("duplicate advice references must resolve locally and exact matches remain detectable", () => {
   const w = word();
@@ -217,5 +222,144 @@ test("duplicate context is bounded, sense-scoped and contains no notes or learni
   }));
   assert.equal(duplicateContext(w, "senses").length, 32);
   assert.equal(duplicateContext(w, "senses")[0].zh.length, 240);
-  assert.match(instruction("collocations"), /same abstract construction/);
+  assert.match(instruction("collocations"), /practical core collocations/);
+});
+
+test("example and collocation matching includes word-level entries without mixing senses", () => {
+  const w = word();
+  const senseId = w.senses[0].id;
+  w.examples = [
+    { id: "word", french: "Quel plat !", translation: "好一道菜！" },
+    { id: "sense", french: "Un plat.", translation: "一道菜。", senseId },
+    {
+      id: "other",
+      french: "Une autre phrase.",
+      translation: "",
+      senseId: "other",
+    },
+  ];
+  w.collocationEntries = [
+    {
+      id: "collocation",
+      pattern: "servir un plat",
+      meaning: "端上一道菜",
+      french: "Je sers un plat.",
+      translation: "",
+      source: { kind: "ai", at: "now" },
+      createdAt: "now",
+    },
+  ];
+  assert.deepEqual(
+    duplicateContext(w, "examples", senseId).map(({ french }) => french),
+    ["Un plat.", "Quel plat !"],
+  );
+  assert.equal(
+    candidateMatch({ french: "Quel plat !" }, w, "examples", senseId)?.status,
+    "equivalent",
+  );
+  assert.equal(
+    candidateMatch({ french: "Une autre phrase." }, w, "examples", senseId),
+    undefined,
+  );
+  assert.equal(
+    candidateMatch({ pattern: "servir un plat" }, w, "collocations", senseId)
+      ?.status,
+    "equivalent",
+  );
+});
+
+test("usage generation input stays stable after saving, but local matches reflect current entries", () => {
+  const w = word();
+  const senseId = w.senses[0].id;
+  const tasks = ["examples", "collocations"] as const;
+  const input = (task: (typeof tasks)[number]) =>
+    generationInput(w.word, w, task, senseId, false);
+  const before = tasks.map(input);
+  const example = { french: "Il sert un plat.", translation: "他端上一道菜。" };
+  const collocation = { pattern: "servir qch à qn", meaning: "给某人端上某物" };
+  assert.equal(candidateMatch(example, w, "examples", senseId), undefined);
+  assert.equal(
+    candidateMatch(collocation, w, "collocations", senseId),
+    undefined,
+  );
+  w.examples.push({ id: "e", ...example, senseId });
+  w.collocationEntries = [
+    {
+      id: "c",
+      ...example,
+      ...collocation,
+      pattern: "servir quelque chose à quelqu’un",
+      senseId,
+      source: { kind: "ai", at: "now" },
+      createdAt: "now",
+    },
+  ];
+  assert.deepEqual(tasks.map(input), before);
+  for (const task of tasks) {
+    assert.doesNotMatch(input(task), /existingContent|Il sert|servir qch/);
+    assert.doesNotMatch(instruction(task), /existingContent|existingRef/);
+  }
+  assert.equal(
+    candidateMatch(example, w, "examples", senseId)?.status,
+    "equivalent",
+  );
+  assert.equal(
+    candidateMatch(collocation, w, "collocations", senseId)?.status,
+    "equivalent",
+  );
+  assert.equal(
+    candidateMatch(
+      { ...example, french: "Il apporte un plat." },
+      w,
+      "examples",
+      senseId,
+    )?.status,
+    "overlap",
+  );
+  assert.equal(
+    candidateMatch(
+      { ...collocation, pattern: "servir qch de qn" },
+      w,
+      "collocations",
+      senseId,
+    )?.status,
+    "overlap",
+  );
+  assert.equal(
+    candidateMatch(
+      { french: "Une autre phrase.", match: "equivalent", existingRef: "0" },
+      w,
+      "examples",
+      senseId,
+    ),
+    undefined,
+  );
+  w.senses[0].en = "meal";
+  assert.notDeepEqual(tasks.map(input), before);
+});
+
+test("mnemonics compare the saved cue with exact or validated AI matches", () => {
+  const w = word();
+  w.mnemonic = "联想到餐桌上的盘子。";
+  assert.deepEqual(duplicateContext(w, "mnemonic"), [
+    { ref: "0", text: w.mnemonic },
+  ]);
+  assert.equal(
+    candidateMatch({ text: w.mnemonic }, w, "mnemonic")?.status,
+    "equivalent",
+  );
+  const draft = {
+    text: "想象餐桌上有一盘菜。",
+    match: "overlap",
+    existingRef: "0",
+  };
+  const [parsed] = parseCandidates(
+    JSON.stringify({ items: [draft] }),
+    "mnemonic",
+  );
+  assert.equal(candidateMatch(parsed, w, "mnemonic")?.status, "overlap");
+  assert.equal(
+    candidateMatch({ ...parsed, existingRef: "1" }, w, "mnemonic"),
+    undefined,
+  );
 });
