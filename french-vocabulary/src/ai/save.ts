@@ -1,6 +1,7 @@
 import { canonical, Library, newWord, now, uid, Word } from "../core/model";
 import { Candidate, candidateSense, Task } from "./core";
 import { sameSenseHeadword } from "./duplicates";
+import { familyMatchKey } from "./family";
 export function candidateSaveSummary(options: {
   count: number;
   replacements: number;
@@ -74,13 +75,8 @@ export function saveAI(
     throw Error("Word content changed. Reopen AI preview.");
   if (!word) {
     if (task !== "senses") throw Error("Choose an existing word.");
-    if (
-      lib.words.some(
-        (w) =>
-          canonical(w.word).toLowerCase() ===
-          canonical(options.spelling).toLowerCase(),
-      )
-    )
+    const spellingKey = familyMatchKey(options.spelling);
+    if (lib.words.some((w) => familyMatchKey(w.word) === spellingKey))
       throw Error("Word already exists. Open its AI Senses action instead.");
     word = newWord(options.spelling, candidateSense(items[0]));
     word.senses = [];

@@ -35,6 +35,33 @@ test("clipboard screen blocks typical secrets and accepts French phrases", () =>
   for (const text of ["l'ami", "rendez-vous", "s'il vous plaît", "école"])
     assert.equal(safeVocabulary(text), text);
 });
+test("AI add rejects annotated headword duplicates without changing existing words", () => {
+  for (const [stored, spelling] of [
+    ["préfectoral(e)", "préfectoral"],
+    ["préfectoral,e", "préfectoral"],
+    ["fictif(ve)", "fictif"],
+    ["trouver(se)", "se trouver"],
+  ]) {
+    const lib = emptyLibrary();
+    lib.words.push(newWord(stored, candidateSense(item)));
+    const before = structuredClone(lib);
+    assert.throws(
+      () =>
+        saveAI(lib, { task: "senses", spelling, items: [item], targets: [] }),
+      /Word already exists/,
+    );
+    assert.deepEqual(lib, before);
+  }
+  const lib = emptyLibrary();
+  lib.words.push(newWord("parler (à)", candidateSense(item)));
+  saveAI(lib, {
+    task: "senses",
+    spelling: "parler (de)",
+    items: [item],
+    targets: [],
+  });
+  assert.equal(lib.words.length, 2);
+});
 test("group comparison accepts selected words without a spelling field", () => {
   const first = newWord("ami", candidateSense(item));
   const second = newWord("copain", candidateSense(item));

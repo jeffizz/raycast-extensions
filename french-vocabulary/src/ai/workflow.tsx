@@ -37,6 +37,7 @@ import {
   sameSenseHeadword,
 } from "./duplicates";
 import { WordFamily } from "./family-view";
+import { familyMatchBatch, familyMatchKey } from "./family";
 import { candidateSaveSummary, saveAI } from "./save";
 import { md } from "../core/presentation";
 import { stopSpeech } from "../speech";
@@ -262,6 +263,50 @@ function GenerateForm({
         throw Error(
           "Enter a short vocabulary word or phrase, not private information.",
         );
+      if (!word && !group && task === "senses") {
+        const matches =
+          familyMatchBatch(data.lib, [spelling]).get(
+            familyMatchKey(spelling),
+          ) ?? [];
+        if (matches.length) {
+          push(
+            <List
+              navigationTitle="Matching Vocabulary"
+              searchBarPlaceholder="Choose an existing word…"
+            >
+              <List.Section title="Already in Your Library">
+                {matches.map((match) => (
+                  <List.Item
+                    key={match.id}
+                    title={match.word}
+                    subtitle={[
+                      match.archived ? "Archived" : "",
+                      match.senses[0]?.zh || match.senses[0]?.en,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                    actions={
+                      <ActionPanel>
+                        <Action.Push
+                          title="Open Existing Senses"
+                          target={
+                            <AIWordTool
+                              word={match}
+                              initialTool="senses"
+                              onSaved={onSaved}
+                            />
+                          }
+                        />
+                      </ActionPanel>
+                    }
+                  />
+                ))}
+              </List.Section>
+            </List>,
+          );
+          return;
+        }
+      }
       const input = group
         ? comparisonInput(data.lib.words, values.members ?? [])
         : generationInput(spelling, word, task, values.sense, searchSources);
