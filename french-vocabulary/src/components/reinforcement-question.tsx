@@ -14,6 +14,7 @@ export function ReinforcementQuestion({
   word,
   correctId,
   onEnd,
+  onSpeak,
   choices,
   onAnswer,
   onContinue,
@@ -21,6 +22,7 @@ export function ReinforcementQuestion({
   word: string;
   correctId: string;
   onEnd: () => Promise<void>;
+  onSpeak: () => Promise<void>;
   choices: Choice[];
   onAnswer: (choice: Choice) => Promise<void>;
   onContinue: () => void;
@@ -59,20 +61,29 @@ export function ReinforcementQuestion({
     });
   };
   const selectedChoice = choices.find((c) => "option-" + c.wordId === selected);
-  const actions = (
+  const actions = (questionRow = false) => (
     <ActionPanel>
+      {questionRow && (
+        <Action
+          title="Speak Word"
+          icon={Icon.SpeakerHigh}
+          onAction={() => onSpeak().catch(report)}
+        />
+      )}
       {picked ? (
         <Action title="Continue" onAction={onContinue} />
       ) : (
         <>
-          <Action
-            title={
-              selectedChoice ? "Submit Selected Answer" : "Choose with ⌘1–4"
-            }
-            onAction={() =>
-              selectedChoice ? select(selectedChoice) : instructions()
-            }
-          />
+          {!questionRow && (
+            <Action
+              title={
+                selectedChoice ? "Submit Selected Answer" : "Choose with ⌘1–4"
+              }
+              onAction={() =>
+                selectedChoice ? select(selectedChoice) : instructions()
+              }
+            />
+          )}
           <Action title="Answering Instructions" onAction={instructions} />
           <ActionPanel.Section title="Choose an Answer">
             {(rowsReady ? choices : []).map((c, i) => (
@@ -115,11 +126,11 @@ export function ReinforcementQuestion({
       }}
       searchBarPlaceholder={
         picked
-          ? "Press Return to continue · Not graded"
+          ? "Return on the word to speak · Continue in Actions"
           : "Choose with ⌘1–4 or Actions, or select an option and press Return"
       }
       navigationTitle="Multiple Choice · Not Graded"
-      actions={actions}
+      actions={actions()}
     >
       <List.Item
         id="question"
@@ -138,7 +149,7 @@ export function ReinforcementQuestion({
               : "Incorrect · Not Graded"
             : "Multiple Choice · Not Graded"
         }
-        actions={actions}
+        actions={actions(true)}
       />
       {(rowsReady ? choices : []).map((c, i) => (
         <List.Item
@@ -165,7 +176,7 @@ export function ReinforcementQuestion({
                 ? Icon.XMarkCircle
                 : undefined
           }
-          actions={actions}
+          actions={actions()}
         />
       ))}
     </List>

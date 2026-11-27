@@ -954,6 +954,7 @@ function ActivePracticeSession({
     return (
       <ReinforcementQuestion
         word={challenge.word.word}
+        onSpeak={() => speakWord(challenge.word)}
         correctId={challenge.word.id}
         onEnd={finish}
         choices={challenge.choices}

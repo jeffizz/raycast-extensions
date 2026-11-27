@@ -113,6 +113,7 @@ Raycast's approximately 100 MB extension heap limit is a practical constraint.
 - Preserve current session order, answer/reveal state and progress during unrelated content/relationship edits.
   Archive/global practice exclusions apply independently of source filters.
 - Reinforcement is opt-in, delayed, ungraded and persisted; selection movement alone must never submit an answer.
+  Return on the multiple-choice question row speaks the prompt word without grading or advancing.
 - Recall Meaning familiarity linkage is opt-in, default Off:
   first success on Unmarked gives Know; failure gives Fuzzy; Fuzzy needs two consecutive Good/Easy successes.
   Preserve the existing small streak/reset semantics and do not double-count saved answers.

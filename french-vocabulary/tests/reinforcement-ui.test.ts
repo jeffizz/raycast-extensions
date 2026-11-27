@@ -25,12 +25,27 @@ test("reinforcement always renders a full-width list with neutral initial focus"
   assert.ok(!component.includes("onAction={() => select(c)} />"));
 });
 test("choice rows share safe actions and explicitly identify outcome and correct answer", () => {
-  assert.ok(component.includes("actions={actions}"));
+  assert.ok(component.includes("actions={actions()}"));
   assert.ok(component.includes('"Correct · Not Graded"'));
   assert.ok(component.includes('"Incorrect · Not Graded"'));
   assert.ok(component.includes('text: "Correct Answer"'));
   assert.ok(component.includes('text: "Your Answer"'));
 });
+test("the question row offers pronunciation as its primary action", () => {
+  const question = component.slice(
+    component.indexOf('id="question"'),
+    component.indexOf(
+      "{(rowsReady ? choices : []).map((c, i) => (\n        <List.Item",
+    ),
+  );
+  assert.ok(question.includes("actions={actions(true)}"));
+  assert.ok(
+    component.indexOf('title="Speak Word"') <
+      component.indexOf('title="Continue"'),
+  );
+  assert.ok(practice.includes("onSpeak={() => speakWord(challenge.word)}"));
+});
+
 test("reinforcement continuation restores pending question and rejects old list events", () => {
   assert.ok(practice.includes("setReturnToQuestionPending(!!queue[index])"));
   assert.ok(practice.includes("setSelected(queue[window.start]?.id)"));
