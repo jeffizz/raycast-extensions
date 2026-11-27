@@ -31,7 +31,7 @@ test("choice rows share safe actions and explicitly identify outcome and correct
   assert.ok(component.includes('text: "Correct Answer"'));
   assert.ok(component.includes('text: "Your Answer"'));
 });
-test("the question row offers pronunciation as its primary action", () => {
+test("the question row speaks before answering and continues after answering", () => {
   const question = component.slice(
     component.indexOf('id="question"'),
     component.indexOf(
@@ -39,9 +39,17 @@ test("the question row offers pronunciation as its primary action", () => {
     ),
   );
   assert.ok(question.includes("actions={actions(true)}"));
+  const panel = component.slice(
+    component.indexOf("const actions ="),
+    component.indexOf('title="End Session"'),
+  );
+  assert.match(
+    panel,
+    /\{picked && <Action title="Continue" onAction=\{onContinue\} \/>\}/,
+  );
+  assert.match(panel, /\{questionRow && \(\s*<Action\s+title="Speak Word"/);
   assert.ok(
-    component.indexOf('title="Speak Word"') <
-      component.indexOf('title="Continue"'),
+    panel.indexOf('title="Continue"') < panel.indexOf('title="Speak Word"'),
   );
   assert.ok(practice.includes("onSpeak={() => speakWord(challenge.word)}"));
 });

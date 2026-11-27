@@ -63,6 +63,7 @@ export function ReinforcementQuestion({
   const selectedChoice = choices.find((c) => "option-" + c.wordId === selected);
   const actions = (questionRow = false) => (
     <ActionPanel>
+      {picked && <Action title="Continue" onAction={onContinue} />}
       {questionRow && (
         <Action
           title="Speak Word"
@@ -70,9 +71,7 @@ export function ReinforcementQuestion({
           onAction={() => onSpeak().catch(report)}
         />
       )}
-      {picked ? (
-        <Action title="Continue" onAction={onContinue} />
-      ) : (
+      {!picked && (
         <>
           {!questionRow && (
             <Action
@@ -126,7 +125,7 @@ export function ReinforcementQuestion({
       }}
       searchBarPlaceholder={
         picked
-          ? "Return on the word to speak · Continue in Actions"
+          ? "Press Return to continue · Not graded"
           : "Choose with ⌘1–4 or Actions, or select an option and press Return"
       }
       navigationTitle="Multiple Choice · Not Graded"
