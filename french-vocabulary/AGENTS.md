@@ -92,6 +92,8 @@ Raycast's approximately 100 MB extension heap limit is a practical constraint.
   Candidate statuses use compact icons/tooltips rather than long text squeezing list rows.
 - Translation order/visibility is persistent per relevant surface; respect English Only.
   Do not break pronunciation, rating or navigation shortcuts while changing list layouts.
+- Familiarity actions can mark Fuzzy or Know, but do not expose a clear-to-Unmarked action.
+  Preserve Unmarked as a stored state and filter.
 - Practice inclusion remains available separately from archiving; the single-word exclusion action has no shortcut.
   Do not restore the old practice-inclusion blue ring.
 - Collections store member word IDs in library settings; words can belong to multiple collections without duplication.

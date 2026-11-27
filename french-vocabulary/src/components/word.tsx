@@ -123,16 +123,6 @@ export function WordActions({
         }
       />
       <Action
-        title="Clear Familiarity"
-        shortcut={{ modifiers: ["cmd"], key: "0" }}
-        onAction={() =>
-          update((w) => {
-            w.familiarity = "unmarked";
-            delete w.meaningFamiliaritySuccessStreak;
-          })
-        }
-      />
-      <Action
         title="Confusion Groups"
         shortcut={{ modifiers: ["cmd"], key: "g" }}
         icon={Icon.List}

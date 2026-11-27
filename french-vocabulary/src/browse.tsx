@@ -329,7 +329,7 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
     globalSearch,
   ]);
   const batch = async (
-    kind: "remove" | "archive" | "fuzzy" | "known" | "unmarked",
+    kind: "remove" | "archive" | "fuzzy" | "known",
     ids = marked,
   ) => {
     if (batchLock.current) return false;
@@ -339,7 +339,7 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
       await viewQueue.current;
       const set = new Set(ids);
       await store.mutate((l) => {
-        if (kind === "known" || kind === "fuzzy" || kind === "unmarked") {
+        if (kind === "known" || kind === "fuzzy") {
           setSelectionFamiliarity(l, ids, kind);
           return;
         }
@@ -812,10 +812,6 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
                         <Action
                           title="Mark Selection Know"
                           onAction={() => batch("known")}
-                        />
-                        <Action
-                          title="Clear Selection Familiarity"
-                          onAction={() => batch("unmarked")}
                         />
                         <Action
                           title="Add Selection to Confusion Group"

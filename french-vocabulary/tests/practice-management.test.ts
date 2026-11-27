@@ -24,6 +24,22 @@ test("archived and excluded words skip all later question senses without mutatin
     assert.equal(JSON.stringify(lib), before);
   }
 });
+test("manual familiarity menus keep Fuzzy and Know but do not expose clearing", () => {
+  for (const [path, prefix] of [
+    ["components/word.tsx", "Mark"],
+    ["practice.tsx", "Mark"],
+    ["browse.tsx", "Mark Selection"],
+  ]) {
+    const source = readFileSync(
+      new URL("../src/" + path, import.meta.url),
+      "utf8",
+    );
+    assert.ok(source.includes(`title="${prefix} Fuzzy"`));
+    assert.ok(source.includes(`title="${prefix} Know"`));
+    assert.doesNotMatch(source, /title="Clear (?:Selection )?Familiarity"/);
+  }
+});
+
 test("practice management is enabled for all modes and preserves rating shortcuts", () => {
   const source = readFileSync(
     new URL("../src/practice.tsx", import.meta.url),

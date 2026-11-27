@@ -1253,19 +1253,6 @@ function ActivePracticeSession({
             }
           />
           <Action
-            title="Clear Familiarity"
-            shortcut={{
-              modifiers: copy ? ["cmd"] : ["cmd", "shift"],
-              key: "0",
-            }}
-            onAction={() =>
-              updateCurrentWord((w) => {
-                w.familiarity = "unmarked";
-                delete w.meaningFamiliaritySuccessStreak;
-              })
-            }
-          />
-          <Action
             title="Archive Word"
             shortcut={{ modifiers: ["cmd", "shift"], key: "a" }}
             onAction={() =>
