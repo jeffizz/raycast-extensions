@@ -19,6 +19,16 @@ npm run dev
 * **Archived Vocabulary** — restore words without losing notes or review history.
 * **Vocabulary Dashboard** — statistics, SQLite WebDAV backup/restore, and library health.
 
+## Word Chat
+
+Use **⌘⇧H** to hide or show the history list. With the list hidden, the selected reply uses the full width. **Ask a Question** brings back the input. In Dashboard, **Backup & Restore → Browse Remote Word Chat Backups** lists backups for the current library without restoring or modifying them.
+
+Open **AI Vocabulary → Chat About This Word** from Browse, or from the current Practice question after revealing its answer. Both entry points use the same conversation for that word. Questions and completed Markdown replies are saved automatically in a separate local SQLite file. History has no turn limit; page back to read older replies. Unanswered questions can be prepared for retry without resending automatically.
+
+Use **Actions → AI History Window** to choose 0, 1, 3 (default), 5, 7, or 9 recent complete turns. This preference applies to all Word Chats on this Mac. The next-request section shows how many turns fit in the request budget. Opening history does not call AI. Sending uses the configured API or isolated Codex CLI connection, never an automatic fallback. Clear Chat History affects only the current conversation; it cannot retract requests already sent to a provider.
+
+With automatic WebDAV backup enabled, chat changes are backed up independently as per-word JSON files. **Backup Word Chats** retries pending uploads manually. On a new Mac, restore the vocabulary first, then choose **Restore Word Chats** in Dashboard; it imports missing conversations without overwriting local ones. WebDAV must support strong ETags and conditional writes. A cleared chat is backed up as an empty marker; server-managed snapshots are outside the extension’s control. Individual backup files are limited to 4 MiB; a chat above this size stays available locally. This is backup and restore, not cross-device live sync.
+
 ## AI vocabulary assistance
 
 Configure **Dashboard → AI Settings & Keys** first. Each provider (OpenAI, Gemini, DeepSeek, OpenRouter) has one local encrypted key/model; saving activates it. Keys are excluded from library backups. Save the API key first, then select a model from the fetched catalog; manual model IDs are no longer used. JSON-mode support is required. Refresh is explicit, uses the entered key, caches model IDs locally and does not send vocabulary. A failed refresh retains the cache. Initial setup and Refresh Models only retrieve the provider catalog; they never call a generation model for analysis. The full-width picker applies local heuristic rules: suggested models first, unknown models selectable, recognized incompatible endpoints last and not selectable. Labels are not compatibility certification. Previous AI analysis caches are no longer read. Open Official Pricing links to the provider's pricing page; no prices are guessed. No vocabulary or learning records are sent. Saved learning models never change automatically. Generation supports API and Codex CLI connections with the same candidate-review contract. Connection tests are explicit paid requests using the saved configuration, not unsaved form values. No automatic retries or provider fallback occur.

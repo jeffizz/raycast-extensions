@@ -52,7 +52,6 @@ import {
   recallOrders,
   RecallOrder,
   orderRecallQuestions,
-  recordAnswer,
   recallIntervalPreview,
   formatReviewDelay,
   shouldAutoSubmit,
@@ -687,13 +686,9 @@ function ActivePracticeSession({
       active = false;
     };
   }, [sessionLibraryId]);
-  const updateReinforcement = async (
-    lib: Library,
-    wordId: string,
-    again: boolean,
-  ) => {
+  const updateReinforcement = async (wordId: string, again: boolean) => {
     const previous = reinforcementState(
-      lib,
+      { libraryId: sessionLibraryId },
       await store.getMeta<ReinforcementState>("meaning-reinforcement"),
     );
     const next = reinforceAfterRecall(previous, wordId, again);
@@ -701,9 +696,14 @@ function ActivePracticeSession({
     reinforcement.current = next;
     setPendingCount(next.tasks.length);
     if (!mixChoices || next.gap < 3) return;
-    for (const task of next.tasks) {
-      if (task.others.length < 5 || (attempts.current[task.wordId] ?? 0) >= 2)
-        continue;
+    const eligible = next.tasks.filter(
+      (task) =>
+        task.others.length >= 5 && (attempts.current[task.wordId] ?? 0) < 2,
+    );
+    if (!eligible.length) return;
+    const lib = await store.load(false);
+    if (lib.libraryId !== sessionLibraryId) return;
+    for (const task of eligible) {
       const word = lib.words.find((w) => w.id === task.wordId);
       if (
         !word ||
@@ -856,7 +856,6 @@ function ActivePracticeSession({
       ending.current = false;
     }
   };
-  const awaitReinforcementLibrary = useRef<Library | undefined>(undefined);
   const submit = async (
     rating: Grade,
     explicitAnswer?: string,
@@ -879,35 +878,20 @@ function ActivePracticeSession({
     const grade: Grade = q.mode !== "meaning" && !correct ? 1 : rating;
     try {
       if (!saved.current.has(q.id)) {
-        let gradedWord: Word | undefined;
-        pending.current = store.mutate((l) => {
-          if (!extraPractice && !limitDailyQueue(l, q.mode, [q]).length)
-            throw Error(
-              "Daily limit reached. Progress is preserved. Continue tomorrow, increase Daily Limits, or start All Included Words (Extra Practice).",
-            );
-          gradedWord = structuredClone(
-            recordAnswer(
-              l,
-              q,
-              grade,
-              value,
-              correct,
-              updateFamiliarityFromRating,
-            ),
-          );
-          if (q.mode === "meaning")
-            awaitReinforcementLibrary.current = {
-              ...l,
-              cards: [],
-              reviews: [],
-            };
+        const save = store.savePracticeAnswer(sessionLibraryId, q, {
+          rating: grade,
+          answer: value,
+          correct,
+          extraPractice,
+          updateMeaningFamiliarity: updateFamiliarityFromRating,
         });
-        await pending.current;
-        if (gradedWord)
-          setWordUpdates((previous) => ({
-            ...previous,
-            [q.word.id]: gradedWord!,
-          }));
+        pending.current = save;
+        const gradedWord = await save;
+        pending.current = Promise.resolve();
+        setWordUpdates((previous) => ({
+          ...previous,
+          [q.word.id]: gradedWord,
+        }));
         void autoBackup();
         saved.current.add(q.id);
         resultLog.current = [
@@ -915,17 +899,11 @@ function ActivePracticeSession({
           { correct, rating: grade, questionId: q.id },
         ];
         setResults(resultLog.current);
-        if (q.mode === "meaning" && awaitReinforcementLibrary.current) {
+        if (q.mode === "meaning") {
           try {
-            await updateReinforcement(
-              awaitReinforcementLibrary.current,
-              q.word.id,
-              grade === 1,
-            );
+            await updateReinforcement(q.word.id, grade === 1);
           } catch (error) {
             await report(error);
-          } finally {
-            awaitReinforcementLibrary.current = undefined;
           }
         }
       }
@@ -1194,7 +1172,11 @@ function ActivePracticeSession({
           push(<RelatedConfusionGroups wordId={q.word.id} />);
         }}
       />
-      <AIWordActions word={q.word} selectedSenseId={q.sense?.id} />
+      <AIWordActions
+        word={q.word}
+        selectedSenseId={q.sense?.id}
+        allowChat={revealed}
+      />
       <Action.OpenInBrowser
         title="Look up in Frdic"
         shortcut={{ modifiers: ["cmd"], key: "d" }}

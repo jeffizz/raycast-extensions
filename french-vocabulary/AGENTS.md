@@ -9,7 +9,13 @@ do not reconstruct missing requirements from assumptions about previous conversa
 
 - Keep code comments, documentation and UI strings in English. Preserve French and Chinese vocabulary data.
   Answer the user in their chosen language.
-- Inspect Git status/diff first. Preserve unrelated and user-authored changes.
+- At the start of every user turn for this project, check `git status --short`. If there are uncommitted
+  changes (staged, unstaged, or untracked), ask whether to commit the existing changes first and wait
+  for the user's answer before proceeding with the new request. When Raycast offers a structured prompt,
+  use clickable choices (`Commit first` or `Continue without committing`) instead of requiring a typed reply.
+  Fall back to a chat question if unavailable. Skip the question if the user already explicitly chose.
+  Do not commit automatically.
+- Inspect the relevant Git diff before editing. Preserve unrelated and user-authored changes.
 - Do not commit, push or publish without an explicit request. Use focused semantic commit messages.
   Normally let the user verify behaviour before committing.
 - Finish requested implementation and fix actionable build/lint/test failures.
@@ -67,6 +73,8 @@ Raycast's approximately 100 MB extension heap limit is a practical constraint.
 
 - Do not load or clone the complete learning history for settings/content tasks.
   Prefer `load(false)`, targeted row operations and `updateSettings` where appropriate.
+- Practice grading updates one word, one review and (except Copy) one card atomically.
+  Compute daily eligibility without loading all review history into Node.
 - Reuse existing vocabulary references. Keep rendered rows and caches bounded; avoid global growing maps.
 - Word Family matches a batch of candidates in one vocabulary scan, retaining only requested hits.
   Do not replace this with repeated full scans or a persistent whole-library alias index.
@@ -115,6 +123,12 @@ Raycast's approximately 100 MB extension heap limit is a practical constraint.
 
 - Only send task-relevant current vocabulary/meanings, never the entire library, learning history or credentials.
   Generation and saving are distinct: validate, preview, select, then explicitly confirm saving.
+  Confirmed AI comparisons replace group notes; they never append.
+- Word Chat is stored separately by library and word ID. Keep the history boundary and request payload
+  driven by the same bounded context selector. The local history-window preference limits complete turns sent,
+  not stored history, and never bypasses the request byte budget. Do not cache chat answers in the generation cache.
+- Word Chat uses independent per-word WebDAV backups with clear markers and guarded updates;
+  restoring chats must not overwrite local conversations or modify vocabulary data.
 - API model setup/refresh fetches a catalog and uses local assessment; it must not automatically pay for AI analysis.
 - Codex runs independent, ephemeral, isolated tasks through the existing adapter with cancellation/time/output bounds.
   Preserve its tool/network/config restrictions. API retry is explicit and never a silent fallback.

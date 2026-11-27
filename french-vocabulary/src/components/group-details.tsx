@@ -57,6 +57,17 @@ export function GroupDetails({ groupId }: { groupId: string }) {
       setBusy(false);
     }
   };
+  const viewNotes = (
+    <Action
+      title="View Group Notes"
+      icon={Icon.Document}
+      shortcut={Keyboard.Shortcut.Common.New}
+      onAction={() => {
+        stopSpeech();
+        push(<GroupDocument groupId={groupId} notesOnly />);
+      }}
+    />
+  );
   const common = (
     <>
       {group && (
@@ -100,14 +111,6 @@ export function GroupDetails({ groupId }: { groupId: string }) {
           push(<GroupDocument groupId={groupId} />);
         }}
       />
-      <Action
-        title="View Group Notes"
-        shortcut={Keyboard.Shortcut.Common.New}
-        onAction={() => {
-          stopSpeech();
-          push(<GroupDocument groupId={groupId} notesOnly />);
-        }}
-      />
       <Action title="Refresh" onAction={refresh} />
     </>
   );
@@ -115,7 +118,12 @@ export function GroupDetails({ groupId }: { groupId: string }) {
     <List
       isLoading={loading || busy || englishLoading}
       navigationTitle={group?.name ?? "Confusion Group"}
-      actions={<ActionPanel>{common}</ActionPanel>}
+      actions={
+        <ActionPanel>
+          {common}
+          {viewNotes}
+        </ActionPanel>
+      }
     >
       <List.EmptyView title={group ? "No Group Members" : "Group Not Found"} />
       {words.flatMap((word) =>
@@ -164,11 +172,25 @@ export function GroupDetails({ groupId }: { groupId: string }) {
                     }
                   />
                   {common}
+                  {viewNotes}
                 </ActionPanel>
               }
             />
           );
         }),
+      )}
+      {group?.notes?.trim() && (
+        <List.Item
+          id="group-notes"
+          title="Group Notes"
+          icon={Icon.Document}
+          actions={
+            <ActionPanel>
+              {viewNotes}
+              {common}
+            </ActionPanel>
+          }
+        />
       )}
     </List>
   );

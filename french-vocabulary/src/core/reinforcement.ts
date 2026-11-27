@@ -8,7 +8,7 @@ export type ReinforcementState = {
 };
 export type Choice = { wordId: string; word: string; meaning: string };
 export function reinforcementState(
-  lib: Library,
+  lib: Pick<Library, "libraryId">,
   saved?: ReinforcementState,
 ): ReinforcementState {
   return saved?.libraryId === lib.libraryId
@@ -101,14 +101,13 @@ export function reinforcementChoices(
     }))
     .sort((a, b) => a.rank - b.rank || a.tie - b.tie);
   const selected = [word];
+  const selectedMeanings = [meanings(word, english)];
   for (const { w } of candidates) {
-    if (
-      selected.some((other) =>
-        overlaps(meanings(other, english), meanings(w, english)),
-      )
-    )
+    const candidateMeanings = meanings(w, english);
+    if (selectedMeanings.some((other) => overlaps(other, candidateMeanings)))
       continue;
     selected.push(w);
+    selectedMeanings.push(candidateMeanings);
     if (selected.length === 4) break;
   }
   if (selected.length !== 4) return;

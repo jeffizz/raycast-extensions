@@ -178,20 +178,14 @@ function FamilyPage({
     if (lock.current) return;
     const choices = Object.values(selected);
     if (!choices.length || !config || !result) return;
+    const existingCount = choices.filter((choice) => choice.existingId).length;
     lock.current = true;
     setBusy(true);
     try {
       if (
         !(await confirmAlert({
           title: "Save word family?",
-          message:
-            choices
-              .map(
-                (s) =>
-                  (s.existingId ? "Link only: " : "Create and link: ") +
-                  s.candidate.headword,
-              )
-              .join("\n") + "\nExisting words and senses are never modified.",
+          message: `Link existing: ${existingCount}. Create and link: ${choices.length - existingCount}.\nExisting words and senses are never modified.`,
         }))
       )
         return;
@@ -250,7 +244,7 @@ function FamilyPage({
                   message:
                     api.provider +
                     " / " +
-                    api.model +
+                    api.model.replace(/\s+/g, " ").slice(0, 48) +
                     ". API charges may apply.",
                 })
               )

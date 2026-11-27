@@ -17,6 +17,7 @@ import { autoBackup, report, store } from "../runtime";
 import { Group, Word } from "../core/model";
 import {
   Candidate,
+  comparisonInput,
   providers,
   safeVocabulary,
   Task,
@@ -31,13 +32,17 @@ import {
 } from "./client";
 import { duplicateContext, candidateMatch } from "./duplicates";
 import { WordFamily } from "./family-view";
-import { saveAI } from "./save";
+import { candidateSaveSummary, saveAI } from "./save";
 import { md } from "../core/presentation";
+import { stopSpeech } from "../speech";
+import { WordChatView } from "./word-chat-view";
 export function AIWordActions({
   word,
   onSaved,
   selectedSenseId,
+  allowChat = true,
 }: {
+  allowChat?: boolean;
   word: Word;
   selectedSenseId?: string;
   onSaved?: () => Promise<void>;
@@ -78,6 +83,15 @@ export function AIWordActions({
               }
             />
           ),
+        )}
+        {allowChat && (
+          <Action
+            title="Chat About This Word"
+            onAction={() => {
+              stopSpeech();
+              push(<WordChatView word={word} senseId={selectedSenseId} />);
+            }}
+          />
         )}
       </ActionPanel.Submenu>
     </>
@@ -174,7 +188,9 @@ function GenerateForm({
     requestLock.current = true;
     setFailure(undefined);
     try {
-      const spelling = word?.word ?? safeVocabulary(values.spelling);
+      const spelling = group
+        ? ""
+        : (word?.word ?? safeVocabulary(values.spelling ?? ""));
       if (!group && !spelling)
         throw Error(
           "Enter a short vocabulary word or phrase, not private information.",
@@ -182,33 +198,13 @@ function GenerateForm({
       const selected = word?.senses.filter(
         (s) => task === "senses" || s.id === values.sense,
       );
-      const members = group
-        ? data.lib.words
-            .filter((w) => values.members.includes(w.id))
-            .map((w) => ({
-              word: w.word,
-              senses: w.senses.map((s) => ({
-                pos: s.pos,
-                zh: s.zh,
-                en: s.en,
-              })),
-            }))
-        : undefined;
-      if (group && (values.members.length < 2 || values.members.length > 6))
-        throw Error("Select 2–6 words.");
-      const input = JSON.stringify(
-        group
-          ? { words: members }
-          : {
-              word: spelling,
-              existingContent: duplicateContext(word, task, values.sense),
-              senses: selected?.map((s) => ({
-                pos: s.pos,
-                zh: s.zh,
-                en: s.en,
-              })),
-            },
-      );
+      const input = group
+        ? comparisonInput(data.lib.words, values.members ?? [])
+        : JSON.stringify({
+            word: spelling,
+            existingContent: duplicateContext(word, task, values.sense),
+            senses: selected?.map(({ pos, zh, en }) => ({ pos, zh, en })),
+          });
       setBusy(true);
       controller.current = new AbortController();
       const result = await generate(
@@ -294,7 +290,7 @@ function GenerateForm({
                   "Send this vocabulary request to " +
                   providers[api.provider] +
                   " / " +
-                  api.model +
+                  api.model.replace(/\s+/g, " ").slice(0, 48) +
                   ". API charges may apply. The default connection remains Codex CLI.",
               }))
             )
@@ -469,22 +465,17 @@ function CandidateReview({
       if (
         !(await confirmAlert({
           title: "Save selected AI content?",
-          message:
-            JSON.stringify(chosen) +
-            "\n\nMappings: " +
-            selected
-              .map((i) =>
-                targets[i]
-                  ? "Replace " +
-                    (word?.senses.find((s) => s.id === targets[i])?.zh ??
-                      targets[i])
-                  : "Add",
-              )
-              .join("; ") +
-            "\nCollection: " +
-            (collections.find((c) => c.id === collection)?.name ?? "None") +
-            "\nSave mode: " +
-            (append ? "Append" : "Replace"),
+          message: candidateSaveSummary({
+            count: chosen.length,
+            replacements: selected.filter((i) => targets[i]).length,
+            notesDestination: group
+              ? "group notes"
+              : task === "mnemonic" || task === "history"
+                ? "the word's mnemonic"
+                : undefined,
+            append,
+            collectionName: collections.find((c) => c.id === collection)?.name,
+          }),
         }))
       )
         return;
@@ -547,7 +538,7 @@ function CandidateReview({
           ))}
         </ActionPanel.Submenu>
       )}
-      {(group || task === "mnemonic" || task === "history") && (
+      {!group && (task === "mnemonic" || task === "history") && (
         <Action
           title={
             append

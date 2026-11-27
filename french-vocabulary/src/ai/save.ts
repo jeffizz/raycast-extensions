@@ -1,5 +1,27 @@
 import { canonical, Library, newWord, now, uid, Word } from "../core/model";
 import { Candidate, candidateSense, Task } from "./core";
+export function candidateSaveSummary(options: {
+  count: number;
+  replacements: number;
+  notesDestination?: "group notes" | "the word's mnemonic";
+  append: boolean;
+  collectionName?: string;
+}) {
+  const { count, replacements, notesDestination, append, collectionName } =
+    options;
+  const selection = `Selected candidates: ${count}.`;
+  if (notesDestination === "group notes") {
+    return `${selection}\nReplace group notes.`;
+  }
+  if (notesDestination) {
+    return `${selection}\n${append ? "Append to" : "Replace"} ${notesDestination}.`;
+  }
+  const collection = collectionName?.replace(/\s+/g, " ").trim();
+  const destination = collection
+    ? `\nCollection: ${collection.length > 40 ? collection.slice(0, 39) + "…" : collection}`
+    : "";
+  return `${selection}\nAdd: ${count - replacements}. Replace: ${replacements}.${destination}`;
+}
 export function saveAI(
   lib: Library,
   options: {
@@ -31,9 +53,7 @@ export function saveAI(
     const group = lib.groups.find((g) => g.id === options.groupId);
     if (!group || JSON.stringify(group) !== options.groupBefore)
       throw Error("Group changed. Reopen AI preview.");
-    const text = items.map((i) => i.text ?? "").join("\n\n");
-    group.notes =
-      options.append && group.notes ? group.notes + "\n\n" + text : text;
+    group.notes = items.map((i) => i.text ?? "").join("\n\n");
     group.updatedAt = now();
     return;
   }

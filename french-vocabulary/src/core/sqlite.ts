@@ -1,5 +1,8 @@
 import { spawn } from "node:child_process";
 import { reorderedGroupName } from "./group-order";
+import { limitDailyQueue } from "./daily-limits";
+import { recordAnswer, type Question } from "./learning";
+import type { Grade } from "ts-fsrs";
 import {
   mkdir,
   chmod,
@@ -387,6 +390,116 @@ export class Store {
         throw Error("Word changed in another command. Refresh and retry.");
       throw e;
     }
+  }
+  async savePracticeAnswer(
+    libraryId: string,
+    question: Question,
+    options: {
+      rating: Grade;
+      answer: string;
+      correct: boolean;
+      extraPractice?: boolean;
+      updateMeaningFamiliarity?: boolean;
+    },
+  ): Promise<Word> {
+    await this.init();
+    const wordId = sql(question.word.id);
+    const cardId = sql(question.id);
+    const snapshot = JSON.parse(
+      (await sqlite(
+        this.path,
+        `SELECT value AS header,
+          (SELECT data FROM words WHERE id=${wordId}) AS word,
+          (SELECT data FROM cards WHERE id=${cardId}) AS card
+        FROM meta WHERE key='header';`,
+        true,
+      )) || "[]",
+    )[0];
+    const lib: Library = {
+      ...JSON.parse(snapshot.header),
+      words: snapshot.word ? [JSON.parse(snapshot.word)] : [],
+      groups: [],
+      cards: snapshot.card ? [JSON.parse(snapshot.card)] : [],
+      reviews: [],
+    };
+    if (lib.libraryId !== libraryId)
+      throw Error("Library changed. Reopen practice.");
+    const mode = question.mode;
+    if (!options.extraPractice && mode !== "copy") {
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      const startAt = sql(start.toISOString());
+      const endAt = sql(end.toISOString());
+      const sense =
+        mode === "gender"
+          ? "COALESCE(json_extract(data,'$.senseId'),'undefined')"
+          : "''";
+      // Only today's distinct cards leave SQLite; historical rows classify them in place.
+      const rows: { id: string; fresh: number }[] = JSON.parse(
+        (await sqlite(
+          this.path,
+          `WITH today AS (
+            SELECT DISTINCT word_id, ${sense} AS sense FROM reviews
+            WHERE at >= ${startAt} AND at < ${endAt} AND json_extract(data,'$.mode')=${sql(mode)}
+          )
+          SELECT word_id || ${sql(":" + mode)}${mode === "gender" ? " || ':' || sense" : ""} AS id,
+            NOT EXISTS (
+              SELECT 1 FROM reviews
+              WHERE reviews.word_id=today.word_id AND at < ${startAt}
+              AND json_extract(data,'$.mode')=${sql(mode)} AND ${sense}=today.sense
+            ) AS fresh
+          FROM today;`,
+          true,
+        )) || "[]",
+      );
+      const settings = lib.settings?.practice?.[mode];
+      const usage = {
+        newToday: new Set<string>(),
+        reviews: new Set<string>(),
+        newLimit: settings?.dailyNew ?? 10,
+        reviewLimit: settings?.dailyReview ?? Infinity,
+      };
+      for (const row of rows)
+        (row.fresh ? usage.newToday : usage.reviews).add(row.id);
+      if (!limitDailyQueue(lib, mode, [question], start, usage).length)
+        throw Error(
+          "Daily limit reached. Progress is preserved. Continue tomorrow, increase Daily Limits, or start All Included Words (Extra Practice).",
+        );
+    }
+    const word = recordAnswer(
+      lib,
+      question,
+      options.rating,
+      options.answer,
+      options.correct,
+      options.updateMeaningFamiliarity,
+    );
+    const [review] = lib.reviews;
+    const [card] = mode === "copy" ? [] : lib.cards;
+    try {
+      await sqlite(
+        this.path,
+        `BEGIN IMMEDIATE;
+        CREATE TEMP TABLE answer_guard(ok INTEGER CHECK(ok=1));
+        UPDATE meta SET value=json_set(value,'$.revision',json_extract(value,'$.revision')+1)
+        WHERE key='header' AND json_extract(value,'$.libraryId')=${sql(libraryId)} AND json_extract(value,'$.revision')=${lib.revision};
+        INSERT INTO answer_guard VALUES(changes());
+        UPDATE words SET updated_at=${sql(word.updatedAt)},familiarity=${sql(word.familiarity)},data=${sql(JSON.stringify(word))}
+        WHERE id=${wordId};
+        ${card ? `INSERT INTO cards VALUES(${cardId},${wordId},${sql(JSON.stringify(card))}) ON CONFLICT(id) DO UPDATE SET data=excluded.data;` : ""}
+        INSERT INTO reviews VALUES(${sql(review.id)},${wordId},${sql(review.at)},${sql(JSON.stringify(review))});
+        COMMIT;`,
+      );
+    } catch (error) {
+      if (String(error).includes("CHECK constraint"))
+        throw Error(
+          "Library changed in another command. Refresh and try again; nothing was overwritten.",
+        );
+      throw error;
+    }
+    return word;
   }
   async getPracticeCard(
     id: string,

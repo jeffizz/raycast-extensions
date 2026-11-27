@@ -5,10 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   candidateSense,
+  comparisonInput,
+  instruction,
   parseCandidates,
   safeVocabulary,
 } from "../src/ai/core";
-import { saveAI } from "../src/ai/save";
+import { candidateSaveSummary, saveAI } from "../src/ai/save";
 import { emptyLibrary, newWord, uid } from "../src/core/model";
 import { Store, readSQLiteBackup } from "../src/core/sqlite";
 import { baseline, makeDelta, applyDelta } from "../src/core/delta";
@@ -32,6 +34,92 @@ test("clipboard screen blocks typical secrets and accepts French phrases", () =>
     assert.equal(safeVocabulary(text), "");
   for (const text of ["l'ami", "rendez-vous", "s'il vous plaît", "école"])
     assert.equal(safeVocabulary(text), text);
+});
+test("group comparison accepts selected words without a spelling field", () => {
+  const first = newWord("ami", candidateSense(item));
+  const second = newWord("copain", candidateSense(item));
+  const unrelated = newWord("arbre", candidateSense(item));
+  const words = [first, second, unrelated];
+  assert.deepEqual(JSON.parse(comparisonInput(words, [first.id, second.id])), {
+    words: [first, second].map(({ word }) => ({
+      word,
+      senses: [{ pos: item.pos, zh: item.zh, en: item.en }],
+    })),
+  });
+  assert.throws(
+    () => comparisonInput(words, [first.id, "missing"]),
+    /Select 2–6/,
+  );
+});
+test("comparison replaces old notes with the exact generated Markdown", () => {
+  assert.match(instruction("comparison"), /Markdown pipe table/);
+  assert.match(instruction("comparison"), /one word per row/);
+  assert.match(instruction("comparison"), /at most 3 columns in any table/);
+  assert.match(instruction("comparison"), /below the table/);
+  const markdown = [
+    "| 词语 | 核心区别 |",
+    "| --- | --- |",
+    "| ami | 朋友 |",
+    "| copain | 伙伴，较口语 |",
+    "",
+    "- 日常语境中有时可以互换。",
+  ].join("\n");
+  const lib = emptyLibrary();
+  const group = {
+    id: uid(),
+    name: "Friends",
+    wordIds: [],
+    notes: "Manual notes",
+    updatedAt: new Date().toISOString(),
+  };
+  lib.groups.push(group);
+  const items = parseCandidates(
+    JSON.stringify({ items: [{ text: markdown }] }),
+    "comparison",
+  );
+  saveAI(lib, {
+    task: "comparison",
+    spelling: "",
+    items,
+    targets: [],
+    groupId: group.id,
+    groupBefore: JSON.stringify(group),
+    append: true,
+  });
+  assert.equal(group.notes, markdown);
+});
+test("candidate confirmation is short and distinguishes append from replace", () => {
+  const options = {
+    count: 1,
+    replacements: 0,
+    notesDestination: "group notes",
+  } as const;
+  assert.equal(
+    candidateSaveSummary({ ...options, append: true }),
+    "Selected candidates: 1.\nReplace group notes.",
+  );
+  assert.equal(
+    candidateSaveSummary({ ...options, append: false }),
+    "Selected candidates: 1.\nReplace group notes.",
+  );
+  assert.equal(
+    candidateSaveSummary({
+      ...options,
+      notesDestination: "the word's mnemonic",
+      append: true,
+    }),
+    "Selected candidates: 1.\nAppend to the word's mnemonic.",
+  );
+  const summary = candidateSaveSummary({
+    count: 8,
+    replacements: 3,
+    append: true,
+    collectionName: ("Collection\n" + "a".repeat(300)).repeat(3),
+  });
+  assert.match(summary, /Add: 5\. Replace: 3\./);
+  assert.equal(summary.split("\n").length, 3);
+  assert.ok(summary.length < 110);
+  assert.ok(summary.endsWith("…"));
 });
 test("AI candidates enforce field, size and count bounds", () => {
   assert.deepEqual(

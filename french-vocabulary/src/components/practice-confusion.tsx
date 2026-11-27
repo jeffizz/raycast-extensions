@@ -78,7 +78,8 @@ export function PracticeConfusion({
     lock.current = true;
     setBusy(true);
     try {
-      const name = await store.mutate(
+      const name = await store.mutateContent(
+        lib.libraryId,
         (l) => linkPracticeConfusion(l, current.id, selected, groupId).name,
       );
       void autoBackup();

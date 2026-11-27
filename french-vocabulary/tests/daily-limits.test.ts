@@ -76,6 +76,72 @@ test("review-first order, independent caps, pause and repeated reviews", () => {
     15,
   );
 });
+test("targeted grading preserves limits, schedules and history without loading the library", async () => {
+  const lib = library();
+  const queue = questions(lib, "meaning", true);
+  const [old, fresh, rejected] = queue;
+  recordAnswer(lib, old, 3, "", true);
+  lib.reviews[0].at = new Date(2000, 0, 1).toISOString();
+  lib.settings = {
+    practice: {
+      meaning: {
+        autoSpeak: false,
+        scope: "default",
+        wordIds: [],
+        dailyNew: 1,
+        dailyReview: 1,
+      },
+    },
+  };
+  const root = await mkdtemp(join(tmpdir(), "fv-grade-"));
+  try {
+    const db = new Store(root);
+    await db.mutate((l) => Object.assign(l, lib));
+    const baseline = await db.load();
+    const historicalReview = baseline.reviews[0];
+    const noLoad = new Store(root);
+    noLoad.load = async () => {
+      throw Error("Unexpected full library load");
+    };
+    const grade = { rating: 3, answer: "", correct: true } as const;
+    const save = (q: typeof old) =>
+      noLoad.savePracticeAnswer(lib.libraryId, q, grade);
+    await save(old);
+    await save(old);
+    const updated = await noLoad.savePracticeAnswer(lib.libraryId, fresh, {
+      ...grade,
+      updateMeaningFamiliarity: true,
+    });
+    assert.equal(updated.familiarity, "known");
+    await assert.rejects(save(rejected), /Daily limit reached/);
+    await assert.rejects(
+      noLoad.savePracticeAnswer("different-library", fresh, grade),
+      /Library changed/,
+    );
+    for (let i = 0; i < 60; i++)
+      await noLoad.savePracticeAnswer(lib.libraryId, fresh, {
+        ...grade,
+        extraPractice: true,
+      });
+    const copy = questions(lib, "copy", true)[0];
+    await save(copy);
+    const actual = await db.load();
+    assert.deepEqual(
+      actual.reviews.find((r) => r.id === historicalReview.id),
+      historicalReview,
+    );
+    assert.equal(actual.reviews.length, 65);
+    assert.equal(actual.cards.length, 2);
+    assert.deepEqual(
+      actual.words.find((w) => w.id === rejected.word.id),
+      baseline.words.find((w) => w.id === rejected.word.id),
+    );
+    assert.equal(dailyUsage(actual, "meaning").reviews.size, 1);
+    assert.equal(dailyUsage(actual, "meaning").newToday.size, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 test("daily settings persist and reject unsafe values while accepting old libraries", async () => {
   const lib = library();
   validateLibrary(lib);

@@ -31,9 +31,10 @@ export function limitDailyQueue(
   mode: Mode,
   queue: Question[],
   date = new Date(),
+  precomputedUsage?: ReturnType<typeof dailyUsage>,
 ) {
   if (mode === "copy") return queue;
-  const usage = dailyUsage(lib, mode, date);
+  const usage = precomputedUsage ?? dailyUsage(lib, mode, date);
   const cards = new Set(lib.cards.map((c) => c.id));
   let newLeft = Math.max(0, usage.newLimit - usage.newToday.size);
   let reviewLeft = Math.max(0, usage.reviewLimit - usage.reviews.size);

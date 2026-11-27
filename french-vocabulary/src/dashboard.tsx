@@ -52,6 +52,13 @@ import { IndicatorColorSettings } from "./components/indicator-colors";
 import { AIUsage } from "./ai/usage-view";
 import { AISettings } from "./ai/settings";
 import { AIWorkflow } from "./ai/workflow";
+import { RemoteWordChatBackups } from "./ai/word-chat-backup-view";
+import {
+  autoBackupWordChats,
+  chatLibraryId,
+  wordChats,
+} from "./ai/word-chat-runtime";
+import { backupWordChats, restoreWordChats } from "./core/word-chat-backup";
 export default function Dashboard() {
   const { lib, loading, refresh } = useLibrary(),
     { push } = useNavigation();
@@ -160,8 +167,59 @@ export default function Dashboard() {
       }}
     />
   );
+  useEffect(() => {
+    if (!loading && lib.libraryId)
+      void autoBackupWordChats(lib.libraryId).catch(() => {});
+  }, [loading, lib.libraryId]);
   const backupActions = (
     <>
+      <Action
+        title="Backup Word Chats"
+        icon={Icon.Upload}
+        onAction={() =>
+          run(async () => {
+            const count = await backupWordChats(
+              wordChats,
+              webdavConfig(),
+              await chatLibraryId(),
+            );
+            await showToast({
+              style: Toast.Style.Success,
+              title: "Word Chat Backup Complete",
+              message: `${count} changed conversations uploaded.`,
+            });
+          })
+        }
+      />
+      <Action
+        title="Restore Word Chats"
+        icon={Icon.Download}
+        onAction={async () => {
+          if (
+            busy ||
+            !(await confirmAlert({
+              title: "Restore Word Chats from WebDAV?",
+              message:
+                "Restore the vocabulary library first on a new Mac. This imports only missing chats for the current library. Local conversations are not overwritten.",
+            }))
+          )
+            return;
+          await run(async () => {
+            const result = await restoreWordChats(
+              wordChats,
+              webdavConfig(),
+              await chatLibraryId(),
+            );
+            await showToast({
+              style: result.failed ? Toast.Style.Failure : Toast.Style.Success,
+              title: result.failed
+                ? "Word Chat Restore Incomplete"
+                : "Word Chat Restore Complete",
+              message: `Restored: ${result.restored}. Skipped: ${result.skipped}. Failed: ${result.failed}.`,
+            });
+          });
+        }}
+      />
       <Action
         title="Manual Full Backup"
         icon={Icon.Upload}
@@ -319,6 +377,10 @@ export default function Dashboard() {
               <Action
                 title="Browse Remote Files"
                 onAction={() => push(<RemoteBackupStatus />)}
+              />
+              <Action.Push
+                title="Browse Remote Word Chat Backups"
+                target={<RemoteWordChatBackups words={lib.words} />}
               />
               <Action
                 title="Backup Settings"

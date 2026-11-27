@@ -48,7 +48,7 @@ test("history requires executed search and clickable citations", () => {
   ]);
   assert.ok(result[0].text.includes("[1](https://example.com/source)"));
 });
-test("examples keep target meaning and group comparison preserves notes when appending", () => {
+test("examples keep target meaning and group comparison replaces notes with stale-write protection", () => {
   const lib = emptyLibrary();
   const w = newWord(
     "ami",
@@ -83,7 +83,7 @@ test("examples keep target meaning and group comparison preserves notes when app
     groupBefore: before,
     append: true,
   });
-  assert.equal(group.notes, "Original\n\nNew comparison");
+  assert.equal(group.notes, "New comparison");
   assert.throws(
     () =>
       saveAI(lib, {

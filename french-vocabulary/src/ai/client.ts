@@ -106,7 +106,7 @@ export async function generate(
   const hash = createHash("sha256")
     .update(
       JSON.stringify([
-        task === "senses" || task === "family"
+        task === "senses" || task === "family" || task === "comparison"
           ? 11
           : ["collocations", "examples"].includes(task)
             ? 10
@@ -122,8 +122,8 @@ export async function generate(
     )
     .digest("hex");
   const path = join(dir, hash + ".json");
-  await mkdir(dir, { recursive: true, mode: 0o700 });
-  if (!force) {
+  if (task !== "chat") await mkdir(dir, { recursive: true, mode: 0o700 });
+  if (task !== "chat" && !force) {
     try {
       const raw = await readFile(path, "utf8").catch(async (error) => {
         if (task !== "family") throw error;
@@ -165,6 +165,7 @@ export async function generate(
       generatedAt: new Date().toISOString(),
     };
     signal.throwIfAborted();
+    if (task === "chat") return result;
     await writeFile(path, JSON.stringify({ at: Date.now(), result }), {
       mode: 0o600,
     });
@@ -289,6 +290,7 @@ export async function generate(
     ),
   };
   signal.throwIfAborted();
+  if (task === "chat") return result;
   await writeFile(path, JSON.stringify({ at: Date.now(), result }), {
     mode: 0o600,
   });
