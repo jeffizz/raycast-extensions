@@ -124,6 +124,59 @@ test("batch matching collects exact and annotated forms without changing records
   assert.equal(word.familyLinks![0].targetWordId, variant.id);
   assert.equal(variant.word, "suivant(e)");
 });
+test("family matches known suffix and reflexive annotations without stripping constructions", () => {
+  for (const [stored, headword] of [
+    ["fictif(ve)", "fictif"],
+    ["gentil(le)", "gentil"],
+    ["gentil(les)", "gentil"],
+    ["régulier(ère)(s)", "régulier"],
+    ["renouveler(se)", "se renouveler"],
+    ["enfuir（s’）", "s'enfuir"],
+  ]) {
+    const { lib, word, senseId } = sample();
+    const incoming = {
+      ...candidate,
+      headword,
+      pos:
+        headword.startsWith("s'") || headword.startsWith("se ")
+          ? "v.pr."
+          : "adj.",
+    };
+    const existing = newWord(stored, candidateSense(incoming));
+    const original = structuredClone(existing);
+    lib.words.push(existing);
+    assert.deepEqual(familyMatches(lib, headword), [existing]);
+    assert.throws(
+      () => saveFamily(lib, word, senseId, [{ candidate: incoming }], source),
+      /now exists/,
+    );
+    saveFamily(
+      lib,
+      word,
+      senseId,
+      [
+        {
+          candidate: incoming,
+          existingId: existing.id,
+          targetSenseId: existing.senses[0].id,
+        },
+      ],
+      source,
+    );
+    assert.equal(word.familyLinks?.[0].targetWordId, existing.id);
+    assert.equal(lib.words.length, 2);
+    assert.deepEqual(existing, original);
+  }
+  for (const [left, right] of [
+    ["décider (de + inf.)", "décider"],
+    ["aller (à)", "aller"],
+    ["renouveler(se)", "renouveler"],
+    ["mot(ve)", "mot"],
+    ["mot(les)", "mot"],
+  ])
+    assert.notEqual(familyMatchKey(left), familyMatchKey(right));
+});
+
 test("complete irregular annotations match existing senses without permitting duplicate creation", () => {
   const { lib, word, senseId } = sample();
   const incoming = { ...candidate, headword: "nouveau", pos: "adj." };
@@ -141,7 +194,7 @@ test("complete irregular annotations match existing senses without permitting du
     "nouveau(sens)",
     "nouveau(nouvelle)(note)",
     "mot(autre)",
-    "renouveler(se)",
+    "renouveler (à)",
   ])
     assert.equal(familyMatchKey(spelling), familyKey(spelling));
   assert.deepEqual(familyMatches(lib, "nouveau"), [existing]);

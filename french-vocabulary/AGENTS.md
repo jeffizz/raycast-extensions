@@ -138,6 +138,8 @@ Raycast's approximately 100 MB extension heap limit is a practical constraint.
   not adding/replacing senses or linking a mismatched POS. Same-batch genuinely new heads can share multiple senses.
 - Variant matching is conservative: recognize supported suffix annotations and explicit complete variants such as
   nouveau(nouvelle), but never strip arbitrary parentheses. Keep accents and pronominal distinctions.
+  Word Family maps explicit suffix and reflexive labels to matching headwords but preserves construction
+  annotations. AI sense matching may compare known constructions to plain lemmas within the current word.
   Match keys do not rewrite local spellings.
 - Senses/collocations prioritize common, core, accurate content, not novelty relative to local data.
   Equivalent candidates may still be returned and explicitly used to update existing content; never auto-overwrite.

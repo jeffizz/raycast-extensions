@@ -30,7 +30,11 @@ import {
   AIConfig,
   AIResult,
 } from "./client";
-import { duplicateContext, candidateMatch } from "./duplicates";
+import {
+  duplicateContext,
+  candidateMatch,
+  sameSenseHeadword,
+} from "./duplicates";
 import { WordFamily } from "./family-view";
 import { candidateSaveSummary, saveAI } from "./save";
 import { md } from "../core/presentation";
@@ -638,7 +642,7 @@ function CandidateReview({
                       separatePronominal &&
                       c.headword &&
                       /^(se\s|s['’])/i.test(c.headword) &&
-                      c.headword !== spelling
+                      !sameSenseHeadword(c.headword, spelling)
                     ? [{ icon: Icon.Plus, tooltip: "Save to " + c.headword }]
                     : covered(c, i)
                       ? [

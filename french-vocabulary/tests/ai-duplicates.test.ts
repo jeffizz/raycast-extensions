@@ -18,9 +18,10 @@ test("candidate rows use hover icons and preserve the original detail preview", 
   assert.ok(!family.includes("text: linked"));
 });
 import assert from "node:assert/strict";
-import { newWord } from "../src/core/model";
+import { emptyLibrary, newWord } from "../src/core/model";
 import { candidateSense, parseCandidates, instruction } from "../src/ai/core";
 import { duplicateContext, candidateMatch } from "../src/ai/duplicates";
+import { saveAI } from "../src/ai/save";
 const base = { pos: "n.m.", ipa: "pla", zh: "菜肴，盘", en: "dish" };
 const word = () => newWord("plat", candidateSense(base));
 test("discovery remains primary and mixed matched/new results are preserved", () => {
@@ -98,6 +99,90 @@ test("duplicate advice references must resolve locally and exact matches remain 
     ),
   );
 });
+test("sense candidates recognize known annotations without merging different constructions", () => {
+  for (const [stored, lemma] of [
+    ["aller (à)", "aller"],
+    ["décider (de + inf.)", "décider"],
+    ["fictif(ve)", "fictif"],
+    ["gentil(le)", "gentil"],
+    ["régulier(ère)", "régulier"],
+    ["ami(s)", "ami"],
+    ["ami(e)", "ami"],
+    ["ami(es)", "ami"],
+    ["gentil(les)", "gentil"],
+    ["ami,e", "ami"],
+    ["trouver(se)", "se trouver"],
+    ["enfuir(s’)", "s'enfuir"],
+  ]) {
+    const w = { ...newWord(stored, candidateSense(base)), word: stored };
+    assert.equal(
+      candidateMatch({ ...base, headword: lemma }, w, "senses")?.senseId,
+      w.senses[0].id,
+      stored,
+    );
+    assert.equal(w.word, stored);
+  }
+  for (const [stored, candidate] of [
+    ["aller (figuré)", "aller"],
+    ["parler (à)", "parler (de)"],
+    ["trouver(se)", "trouver"],
+    ["trouver", "se trouver"],
+    ["décider (de + inf.)", "decider"],
+  ]) {
+    const w = newWord(stored, candidateSense(base));
+    assert.equal(
+      candidateMatch(
+        { ...base, headword: candidate, match: "equivalent", existingRef: "0" },
+        w,
+        "senses",
+      ),
+      undefined,
+      stored,
+    );
+  }
+});
+
+test("an annotated headword with only a matching Chinese gloss is possible overlap", () => {
+  const s = {
+    pos: "v.i.",
+    ipa: "a.le",
+    zh: "适合，相配；合意",
+    en: "to suit / to go well with",
+  };
+  const w = newWord("aller (à)", candidateSense(s));
+  const match = candidateMatch(
+    { ...s, en: "to suit somebody", headword: "aller" },
+    w,
+    "senses",
+  );
+  assert.equal(match?.status, "overlap");
+  assert.equal(match?.senseId, w.senses[0].id);
+});
+
+test("an explicit update to an annotated pronominal word keeps its original spelling and sense ID", () => {
+  const lib = emptyLibrary();
+  const s = {
+    pos: "v.pr.",
+    ipa: "sə.tʁu.ve",
+    zh: "位于",
+    en: "to be situated",
+  };
+  const w = newWord("trouver(se)", candidateSense(s));
+  lib.words.push(w);
+  const id = w.senses[0].id;
+  saveAI(lib, {
+    word: structuredClone(w),
+    spelling: w.word,
+    task: "senses",
+    items: [{ ...s, headword: "se trouver", en: "to be located" }],
+    targets: [id],
+  });
+  assert.equal(lib.words.length, 1);
+  assert.equal(w.word, "trouver(se)");
+  assert.equal(w.senses[0].id, id);
+  assert.equal(w.senses[0].en, "to be located");
+});
+
 test("duplicate context is bounded, sense-scoped and contains no notes or learning records", () => {
   const w = word();
   w.notes = "private";

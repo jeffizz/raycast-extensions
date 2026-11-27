@@ -1,5 +1,6 @@
 import { canonical, Library, newWord, now, uid, Word } from "../core/model";
 import { Candidate, candidateSense, Task } from "./core";
+import { sameSenseHeadword } from "./duplicates";
 export function candidateSaveSummary(options: {
   count: number;
   replacements: number;
@@ -92,8 +93,7 @@ export function saveAI(
       if (
         options.separatePronominal !== false &&
         /^(se\s|s['’])/i.test(headword) &&
-        headword.toLocaleLowerCase("fr") !==
-          canonical(word!.word).toLocaleLowerCase("fr")
+        !sameSenseHeadword(headword, word!.word)
       ) {
         const sense = { ...candidateSense(item), source };
         let destination = lib.words.find(

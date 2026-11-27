@@ -23,9 +23,14 @@ const fullFamilyVariants: Readonly<Record<string, readonly string[]>> = {
 // Matching only: never rewrite imported spellings or generate all inflected forms.
 export function familyMatchKey(word: string) {
   const exact = familyKey(word);
-  const base = exact
-    .replace(/（/g, "(")
-    .replace(/）/g, ")")
+  if (!/[（(,，]/u.test(exact)) return exact;
+  const annotated = exact.replace(/（/g, "(").replace(/）/g, ")");
+  const reflexive = annotated.match(/^([\p{L}\p{M}-]+)\s*\((se|s')\)$/u);
+  if (reflexive) {
+    const [, verb, marker] = reflexive;
+    return marker === "se" ? `se ${verb}` : `s'${verb}`;
+  }
+  const base = annotated
     .replace(
       /^([\p{L}\p{M}]+)((?:\([\p{L}\p{M}]+\))+)(?=(?:[,，]\s*(?:es|e|s))*$)/u,
       (annotation, head: string, forms: string) => {
@@ -33,7 +38,10 @@ export function familyMatchKey(word: string) {
         return variants.every(
           (form) =>
             fullFamilyVariants[head]?.includes(form) ||
-            ["e", "s", "es"].includes(form),
+            ["e", "s", "es"].includes(form) ||
+            (/f$/u.test(head) && ["ve", "ves"].includes(form)) ||
+            (/l$/u.test(head) && ["le", "les"].includes(form)) ||
+            (/er$/u.test(head) && ["ère", "ères"].includes(form)),
         )
           ? head
           : annotation;
