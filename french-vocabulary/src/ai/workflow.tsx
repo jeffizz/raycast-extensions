@@ -65,7 +65,7 @@ function wordToolMenu({
     <ActionPanel.Submenu
       title={current ? "Switch AI Vocabulary Tool" : "AI Vocabulary"}
       icon={Icon.Stars}
-      shortcut={current ? { modifiers: ["cmd", "shift"], key: "j" } : undefined}
+      shortcut={{ modifiers: ["cmd"], key: "i" }}
     >
       {wordTasks
         .filter((task) => task !== current)

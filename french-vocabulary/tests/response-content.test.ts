@@ -114,10 +114,7 @@ test("thinking override is DeepSeek-only and Word Family is inside the AI submen
   assert.doesNotMatch(actions, /with AI|Generate /);
   assert.ok(src.includes('["senses", "examples", "mnemonic", "collocations"]'));
   assert.match(actions, /Switch AI Vocabulary Tool/);
-  assert.match(
-    actions,
-    /shortcut=\{\s*current\s*\? \{ modifiers: \["cmd", "shift"\], key: "j" \} : undefined\s*\}/,
-  );
+  assert.match(actions, /shortcut=\{\{ modifiers: \["cmd"\], key: "i" \}\}/);
   assert.match(actions, /task !== current/);
   assert.match(actions, /allowChat && current !== "chat"/);
   const tool = src.slice(
