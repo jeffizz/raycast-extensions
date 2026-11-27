@@ -135,6 +135,8 @@ Raycast's approximately 100 MB extension heap limit is a practical constraint.
 - API model setup/refresh fetches a catalog and uses local assessment; it must not automatically pay for AI analysis.
 - Codex runs independent, ephemeral, isolated tasks through the existing adapter with cancellation/time/output bounds.
   Preserve its tool/network/config restrictions. API retry is explicit and never a silent fallback.
+- In practice, show the entire AI Vocabulary menu only after the current answer is revealed.
+  Browse does not use this restriction.
 - Word Family is inside AI Vocabulary, immediately before Chat About This Word. Show saved links and cached/generated candidates.
   Example, collocation and mnemonic review shows saved content separately from AI candidates.
   Word Family has its own 30-day / 300-entry disk cache. Examples and collocations share a separate

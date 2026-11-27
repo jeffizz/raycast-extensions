@@ -1174,11 +1174,9 @@ function ActivePracticeSession({
           push(<RelatedConfusionGroups wordId={q.word.id} />);
         }}
       />
-      <AIWordActions
-        word={q.word}
-        selectedSenseId={q.sense?.id}
-        allowChat={revealed}
-      />
+      {revealed && (
+        <AIWordActions word={q.word} selectedSenseId={q.sense?.id} />
+      )}
       <Action.OpenInBrowser
         title="Look up in Frdic"
         shortcut={{ modifiers: ["cmd"], key: "d" }}

@@ -40,6 +40,16 @@ test("manual familiarity menus keep Fuzzy and Know but do not expose clearing", 
   }
 });
 
+test("practice exposes the entire AI Vocabulary menu only after revealing the answer", () => {
+  const source = readFileSync(
+    new URL("../src/practice.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.equal((source.match(/<AIWordActions\b/g) ?? []).length, 1);
+  assert.match(source, /\{revealed && \(\s*<AIWordActions\b[^>]*\/>\s*\)\}/);
+  assert.doesNotMatch(source, /allowChat=/);
+});
+
 test("practice management is enabled for all modes and preserves rating shortcuts", () => {
   const source = readFileSync(
     new URL("../src/practice.tsx", import.meta.url),
