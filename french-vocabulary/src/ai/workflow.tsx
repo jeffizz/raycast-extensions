@@ -14,7 +14,7 @@ import {
 import { useLocalStorage, usePromise, useForm } from "@raycast/utils";
 import { useEffect, useRef, useState } from "react";
 import { autoBackup, report, store } from "../runtime";
-import { Group, Word } from "../core/model";
+import { emptyLibrary, Group, Word } from "../core/model";
 import {
   Candidate,
   comparisonInput,
@@ -38,7 +38,7 @@ import {
 } from "./duplicates";
 import { WordFamily } from "./family-view";
 import { familyMatchBatch, familyMatchKey } from "./family";
-import { candidateSaveSummary, saveAI } from "./save";
+import { candidateSaveSummary, saveAI, separateSenseHeadword } from "./save";
 import { md } from "../core/presentation";
 import { stopSpeech } from "../speech";
 import { WordChatView } from "./word-chat-view";
@@ -168,7 +168,10 @@ export function AIWorkflow({
   onSaved?: () => Promise<void>;
 }) {
   const { data, isLoading } = usePromise(async () => ({
-    lib: await store.load(false),
+    lib:
+      word && !group
+        ? await store.loadWordContent(word.id)
+        : await store.load(false),
     config: await getConfig(),
     clipboard:
       word || group ? "" : safeVocabulary((await Clipboard.readText()) ?? ""),
@@ -594,24 +597,43 @@ function CandidateReview({
         }))
       )
         return;
-      await store.mutateContent(libraryId, (lib) =>
-        saveAI(lib, {
-          word,
-          spelling,
-          task,
-          senseId,
-          items: chosen,
-          separatePronominal,
-          provider,
-          model,
-          generatedAt: currentResult.generatedAt,
-          targets: selected.map((i) => targets[i] ?? ""),
-          collectionId: collection,
-          groupId: group?.id,
-          groupBefore: group ? JSON.stringify(group) : undefined,
-          append,
-        }),
-      );
+      const options = {
+        word,
+        spelling,
+        task,
+        senseId,
+        items: chosen,
+        separatePronominal,
+        provider,
+        model,
+        generatedAt: currentResult.generatedAt,
+        targets: selected.map((i) => targets[i] ?? ""),
+        collectionId: collection,
+        groupId: group?.id,
+        groupBefore: group ? JSON.stringify(group) : undefined,
+        append,
+      };
+      if (
+        word &&
+        !group &&
+        !collection &&
+        (task !== "senses" ||
+          !chosen.some((item) =>
+            separateSenseHeadword(item, word, separatePronominal),
+          ))
+      ) {
+        await store.updateWord(
+          word.id,
+          (current) => {
+            const lib = emptyLibrary();
+            lib.words = [current];
+            saveAI(lib, options);
+          },
+          libraryId,
+        );
+      } else {
+        await store.mutateContent(libraryId, (lib) => saveAI(lib, options));
+      }
       void autoBackup();
       await onSaved?.();
       await showToast({

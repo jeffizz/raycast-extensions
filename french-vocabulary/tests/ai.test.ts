@@ -35,6 +35,65 @@ test("clipboard screen blocks typical secrets and accepts French phrases", () =>
   for (const text of ["l'ami", "rendez-vous", "s'il vous plaît", "école"])
     assert.equal(safeVocabulary(text), text);
 });
+test("targeted AI preview and save leave unrelated vocabulary and groups intact", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "fv-ai-targeted-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const db = new Store(root);
+  const first = newWord("ami", candidateSense(item));
+  const second = newWord("table", candidateSense(item));
+  await db.mutate((lib) => {
+    lib.words.push(first, second);
+    lib.groups.push({
+      id: uid(),
+      name: "Pair",
+      wordIds: [first.id, second.id],
+      notes: "",
+      updatedAt: new Date().toISOString(),
+    });
+  });
+  const before = await db.load();
+  const scoped = new Store(root);
+  scoped.load = async () => {
+    throw Error("Unexpected full library load");
+  };
+  const preview = await scoped.loadWordContent(first.id);
+  assert.deepEqual(
+    preview.words.map((w) => w.id),
+    [first.id],
+  );
+  assert.deepEqual(preview.groups, []);
+  assert.deepEqual(preview.reviews, []);
+  await assert.rejects(
+    scoped.updateWord(
+      first.id,
+      (w) => {
+        w.mnemonic = "Wrong library";
+      },
+      "different-library",
+    ),
+    /Word changed/,
+  );
+  assert.deepEqual(await db.load(), before);
+  await scoped.updateWord(
+    first.id,
+    (w) => {
+      const lib = emptyLibrary();
+      lib.words = [w];
+      saveAI(lib, {
+        word: preview.words[0],
+        spelling: first.word,
+        task: "mnemonic",
+        items: [{ text: "A memory cue" }],
+        targets: [],
+      });
+    },
+    preview.libraryId,
+  );
+  const after = await db.load();
+  assert.equal(after.words[0].mnemonic, "A memory cue");
+  assert.deepEqual(after.words[1], before.words[1]);
+  assert.deepEqual(after.groups, before.groups);
+});
 test("AI add rejects annotated headword duplicates without changing existing words", () => {
   for (const [stored, spelling] of [
     ["préfectoral(e)", "préfectoral"],

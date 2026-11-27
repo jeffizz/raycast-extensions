@@ -641,9 +641,10 @@ function ActivePracticeSession({
     if (togglingAudio.current || ending.current) return;
     togglingAudio.current = true;
     try {
-      const enabled = await store.mutate((l) =>
-        toggleAutoSpeak(l, queue[0].mode),
-      );
+      let enabled = autoSpeak;
+      await store.updateSettings(sessionLibraryId, (l) => {
+        enabled = toggleAutoSpeak(l, queue[0].mode);
+      });
       setAutoSpeak(enabled);
       void autoBackup();
     } catch (e) {

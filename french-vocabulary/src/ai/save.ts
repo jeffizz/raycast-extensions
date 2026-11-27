@@ -24,6 +24,19 @@ export function candidateSaveSummary(options: {
     : "";
   return `${selection}\nAdd: ${count - replacements}. Replace: ${replacements}.${destination}`;
 }
+export function separateSenseHeadword(
+  item: Candidate,
+  word: Word,
+  separate = true,
+) {
+  const headword = item.headword ? canonical(item.headword) : "";
+  return separate &&
+    /^(se\s|s['’])/i.test(headword) &&
+    !sameSenseHeadword(headword, word.word)
+    ? headword
+    : "";
+}
+
 export function saveAI(
   lib: Library,
   options: {
@@ -65,6 +78,7 @@ export function saveAI(
   if (
     options.word &&
     (!word ||
+      word.word !== options.word.word ||
       JSON.stringify(word.senses) !== JSON.stringify(options.word.senses) ||
       word.mnemonic !== options.word.mnemonic ||
       word.collocations !== options.word.collocations ||
@@ -85,12 +99,12 @@ export function saveAI(
   if (task === "senses") {
     const replaced = new Set<string>();
     items.forEach((item, i) => {
-      const headword = item.headword ? canonical(item.headword) : "";
-      if (
-        options.separatePronominal !== false &&
-        /^(se\s|s['’])/i.test(headword) &&
-        !sameSenseHeadword(headword, word!.word)
-      ) {
+      const headword = separateSenseHeadword(
+        item,
+        word!,
+        options.separatePronominal,
+      );
+      if (headword) {
         const sense = { ...candidateSense(item), source };
         let destination = lib.words.find(
           (w) =>

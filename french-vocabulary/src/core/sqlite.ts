@@ -359,7 +359,30 @@ export class Store {
       COMMIT;`,
     );
   }
-  async updateWord(id: string, edit: (w: Word) => void | Promise<void>) {
+  async loadWordContent(id: string): Promise<Library> {
+    await this.init();
+    const rows = JSON.parse(
+      (await sqlite(
+        this.path,
+        `SELECT value AS header, (SELECT data FROM words WHERE id=${sql(id)}) AS word FROM meta WHERE key='header';`,
+        true,
+      )) || "[]",
+    ) as { header: string; word?: string | null }[];
+    const row = rows[0];
+    if (!row?.word) throw Error("Word no longer exists.");
+    return {
+      ...JSON.parse(row.header),
+      words: [JSON.parse(row.word)],
+      groups: [],
+      cards: [],
+      reviews: [],
+    };
+  }
+  async updateWord(
+    id: string,
+    edit: (w: Word) => void | Promise<void>,
+    libraryId?: string,
+  ) {
     await this.init();
     const rows = JSON.parse(
       (await sqlite(
@@ -381,7 +404,8 @@ export class Store {
       await sqlite(
         this.path,
         `BEGIN IMMEDIATE;
-      UPDATE words SET word=${sql(word.word)},archived=${+word.archived},practice=${+word.practice},familiarity=${sql(word.familiarity)},updated_at=${sql(word.updatedAt)},data=CASE WHEN json_extract(data,'$.lastViewedAt') IS NULL THEN ${data} ELSE json_set(${data},'$.lastViewedAt',json_extract(data,'$.lastViewedAt')) END WHERE id=${sql(id)} AND json_remove(data,'$.lastViewedAt')=json_remove(${sql(before)},'$.lastViewedAt');
+      UPDATE words SET word=${sql(word.word)},archived=${+word.archived},practice=${+word.practice},familiarity=${sql(word.familiarity)},updated_at=${sql(word.updatedAt)},data=CASE WHEN json_extract(data,'$.lastViewedAt') IS NULL THEN ${data} ELSE json_set(${data},'$.lastViewedAt',json_extract(data,'$.lastViewedAt')) END WHERE id=${sql(id)} AND json_remove(data,'$.lastViewedAt')=json_remove(${sql(before)},'$.lastViewedAt')
+      ${libraryId === undefined ? "" : `AND EXISTS(SELECT 1 FROM meta WHERE key='header' AND json_extract(value,'$.libraryId')=${sql(libraryId)})`};
       CREATE TEMP TABLE edit_guard(ok INTEGER CHECK(ok=1));INSERT INTO edit_guard VALUES(changes());
       UPDATE meta SET value=json_set(value,'$.revision',json_extract(value,'$.revision')+1) WHERE key='header';COMMIT;`,
       );
