@@ -103,14 +103,28 @@ test("thinking override is DeepSeek-only and Word Family is inside the AI submen
     "utf8",
   );
   const actions = src.slice(
+    src.indexOf("function wordToolMenu"),
     src.indexOf("export function AIWordActions"),
-    src.indexOf("export function AIWorkflow"),
   );
-  const submenu = actions.indexOf('<ActionPanel.Submenu title="AI Vocabulary"');
+  const submenu = actions.indexOf("<ActionPanel.Submenu");
   const family = actions.indexOf('title="Word Family"');
   const chat = actions.indexOf('title="Chat About This Word"');
   assert.ok(submenu >= 0 && submenu < family && family < chat);
   assert.doesNotMatch(actions.slice(family, chat), /icon=/);
   assert.doesNotMatch(actions, /with AI|Generate /);
-  assert.ok(actions.includes('["senses", "examples", "mnemonic", "collocations"]'));
+  assert.ok(src.includes('["senses", "examples", "mnemonic", "collocations"]'));
+  assert.match(actions, /Switch AI Vocabulary Tool/);
+  assert.match(
+    actions,
+    /shortcut=\{\s*current\s*\? \{ modifiers: \["cmd", "shift"\], key: "j" \} : undefined\s*\}/,
+  );
+  assert.match(actions, /task !== current/);
+  assert.match(actions, /allowChat && current !== "chat"/);
+  const tool = src.slice(
+    src.indexOf("function AIWordTool"),
+    src.indexOf("export function AIWorkflow"),
+  );
+  assert.doesNotMatch(tool, /push\(/);
+  assert.match(tool, /setTool\(\{ tool: next, senseId: nextSense \}\)/);
+  assert.equal((tool.match(/key=\{tool\}/g) ?? []).length, 3);
 });

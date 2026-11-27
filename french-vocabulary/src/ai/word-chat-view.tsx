@@ -34,7 +34,9 @@ const sending = new Set<string>();
 export function WordChatView({
   word,
   senseId,
+  switchAction,
 }: {
+  switchAction?: React.ReactElement;
   word: Word;
   senseId?: string;
 }) {
@@ -302,6 +304,7 @@ export function WordChatView({
       {!busy && (data?.page.length ?? 0) > 0 && (
         <Action title="Clear Chat History" icon={Icon.Trash} onAction={clear} />
       )}
+      {!busy && switchAction}
     </ActionPanel>
   );
   const turnMarkdown = (turn: ChatTurn) =>

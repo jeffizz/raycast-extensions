@@ -52,7 +52,9 @@ export function WordFamily({
   word,
   selectedSenseId,
   onSaved,
+  switchActions,
 }: {
+  switchActions?: (senseId?: string) => React.ReactElement;
   word: Word;
   selectedSenseId?: string;
   onSaved?: () => Promise<void>;
@@ -61,17 +63,20 @@ export function WordFamily({
   const [senseId, setSenseId] = useState(
     selectedSenseId ?? word.senses[0]?.id ?? "",
   );
+  const switchPanel = switchActions && (
+    <ActionPanel>{switchActions(senseId || undefined)}</ActionPanel>
+  );
   if (!data)
     return (
-      <List isLoading={isLoading}>
-        <List.EmptyView title="Loading Word Family" />
+      <List isLoading={isLoading} actions={switchPanel}>
+        <List.EmptyView title="Loading Word Family" actions={switchPanel} />
       </List>
     );
   const current = data.words.find((w) => w.id === word.id);
   if (!current)
     return (
-      <List>
-        <List.EmptyView title="Word No Longer Exists" />
+      <List actions={switchPanel}>
+        <List.EmptyView title="Word No Longer Exists" actions={switchPanel} />
       </List>
     );
   const sense =
@@ -84,6 +89,7 @@ export function WordFamily({
       senseId={sense.id}
       setSenseId={setSenseId}
       onSaved={onSaved}
+      switchAction={switchActions?.(sense.id)}
     />
   );
 }
@@ -93,7 +99,9 @@ function FamilyPage({
   senseId,
   setSenseId,
   onSaved,
+  switchAction,
 }: {
+  switchAction?: React.ReactElement;
   initial: Library;
   word: Word;
   senseId: string;
@@ -220,6 +228,7 @@ function FamilyPage({
         icon={Icon.Checkmark}
         onAction={save}
       />
+      {!busy && switchAction}
       <Action
         title={result ? "Regenerate with AI" : "Find More with AI"}
         icon={Icon.Stars}

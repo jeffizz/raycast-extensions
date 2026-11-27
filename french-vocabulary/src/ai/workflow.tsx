@@ -41,60 +41,114 @@ import { candidateSaveSummary, saveAI } from "./save";
 import { md } from "../core/presentation";
 import { stopSpeech } from "../speech";
 import { WordChatView } from "./word-chat-view";
-export function AIWordActions({
-  word,
-  onSaved,
-  selectedSenseId,
-  allowChat = true,
-}: {
+const wordTasks = ["senses", "examples", "mnemonic", "collocations"] as const;
+type WordTool = (typeof wordTasks)[number] | "family" | "chat";
+type WordToolProps = {
   allowChat?: boolean;
   word: Word;
   selectedSenseId?: string;
   onSaved?: () => Promise<void>;
+};
+type SwitchActions = (senseId?: string) => React.ReactElement;
+
+function wordToolMenu({
+  current,
+  allowChat = true,
+  onChoose,
+}: {
+  current?: WordTool;
+  allowChat?: boolean;
+  onChoose: (tool: WordTool) => void;
 }) {
-  const { push } = useNavigation();
   return (
-    <ActionPanel.Submenu title="AI Vocabulary" icon={Icon.Stars}>
-      {(["senses", "examples", "mnemonic", "collocations"] as Task[]).map(
-        (task) => (
+    <ActionPanel.Submenu
+      title={current ? "Switch AI Vocabulary Tool" : "AI Vocabulary"}
+      icon={Icon.Stars}
+      shortcut={current ? { modifiers: ["cmd", "shift"], key: "j" } : undefined}
+    >
+      {wordTasks
+        .filter((task) => task !== current)
+        .map((task) => (
           <Action
             key={task}
             title={task[0].toUpperCase() + task.slice(1)}
-            onAction={() =>
-              push(
-                <AIWorkflow
-                  word={word}
-                  task={task}
-                  onSaved={onSaved}
-                  selectedSenseId={selectedSenseId}
-                />,
-              )
-            }
+            onAction={() => onChoose(task)}
           />
-        ),
+        ))}
+      {current !== "family" && (
+        <Action title="Word Family" onAction={() => onChoose("family")} />
       )}
-      <Action
-        title="Word Family"
-        onAction={() =>
-          push(
-            <WordFamily
-              word={word}
-              selectedSenseId={selectedSenseId}
-              onSaved={onSaved}
-            />,
-          )
-        }
-      />
-      {allowChat && (
+      {allowChat && current !== "chat" && (
         <Action
           title="Chat About This Word"
-          onAction={() => {
-            stopSpeech();
-            push(<WordChatView word={word} senseId={selectedSenseId} />);
-          }}
+          onAction={() => onChoose("chat")}
         />
       )}
     </ActionPanel.Submenu>
+  );
+}
+
+export function AIWordActions(props: WordToolProps) {
+  const { push } = useNavigation();
+  return wordToolMenu({
+    allowChat: props.allowChat,
+    onChoose: (tool) => {
+      if (tool === "chat") stopSpeech();
+      push(<AIWordTool {...props} initialTool={tool} />);
+    },
+  });
+}
+
+function AIWordTool({
+  initialTool,
+  word,
+  selectedSenseId,
+  onSaved,
+  allowChat,
+}: WordToolProps & { initialTool: WordTool }) {
+  const [{ tool, senseId }, setTool] = useState({
+    tool: initialTool,
+    senseId: selectedSenseId,
+  });
+  const switchActions: SwitchActions = (nextSense = senseId) =>
+    wordToolMenu({
+      current: tool,
+      allowChat,
+      onChoose: (next) => {
+        if (next === "chat") stopSpeech();
+        setTool({ tool: next, senseId: nextSense });
+      },
+    });
+
+  // Replace the mounted tool rather than stacking pages on repeated switches.
+  if (tool === "family")
+    return (
+      <WordFamily
+        key={tool}
+        word={word}
+        selectedSenseId={senseId}
+        onSaved={onSaved}
+        switchActions={switchActions}
+      />
+    );
+  if (tool === "chat")
+    return (
+      <WordChatView
+        key={tool}
+        word={word}
+        senseId={senseId}
+        switchAction={switchActions()}
+      />
+    );
+  return (
+    <AIWorkflow
+      key={tool}
+      word={word}
+      task={tool}
+      selectedSenseId={senseId}
+      onSaved={onSaved}
+      switchActions={switchActions}
+    />
   );
 }
 export function AIWorkflow({
@@ -103,7 +157,9 @@ export function AIWorkflow({
   selectedSenseId,
   group,
   onSaved,
+  switchActions,
 }: {
+  switchActions?: SwitchActions;
   word?: Word;
   task?: Task;
   selectedSenseId?: string;
@@ -116,12 +172,20 @@ export function AIWorkflow({
     clipboard:
       word || group ? "" : safeVocabulary((await Clipboard.readText()) ?? ""),
   }));
-  if (isLoading) return <Form isLoading />;
+  const switchAction = switchActions?.();
+  if (isLoading)
+    return (
+      <List
+        isLoading
+        actions={switchAction && <ActionPanel>{switchAction}</ActionPanel>}
+      />
+    );
   if (!data)
     return (
-      <List>
+      <List actions={switchAction && <ActionPanel>{switchAction}</ActionPanel>}>
         <List.EmptyView
           title="AI Not Configured"
+          actions={switchAction && <ActionPanel>{switchAction}</ActionPanel>}
           description="Open Dashboard → AI Settings & Keys."
         />
       </List>
@@ -141,6 +205,7 @@ export function AIWorkflow({
       }
       onSaved={onSaved}
       data={data}
+      switchActions={switchActions}
       selectedSenseId={selectedSenseId}
     />
   );
@@ -152,7 +217,9 @@ function GenerateForm({
   onSaved,
   data,
   selectedSenseId,
+  switchActions,
 }: {
+  switchActions?: SwitchActions;
   word?: Word;
   task: Task;
   selectedSenseId?: string;
@@ -211,7 +278,11 @@ function GenerateForm({
       const reviewPage = (
         <CandidateReview
           result={result}
-          direct={direct}
+          direct={direct || !!switchActions}
+          switchAction={switchActions?.(values.sense || undefined)}
+          onChangeOptions={
+            switchActions && !direct ? () => setReview(undefined) : undefined
+          }
           word={word}
           group={group}
           spelling={spelling}
@@ -229,7 +300,7 @@ function GenerateForm({
           }
         />
       );
-      if (direct) setReview(reviewPage);
+      if (direct || switchActions) setReview(reviewPage);
       else push(reviewPage);
     } catch (e) {
       if (!controller.current?.signal.aborted) {
@@ -309,6 +380,7 @@ function GenerateForm({
               title="Cancel Request"
               onAction={() => controller.current?.abort()}
             />
+            {switchActions?.(initialSenseId || undefined)}
           </ActionPanel>
         }
       >
@@ -337,6 +409,7 @@ function GenerateForm({
             title="Cancel Request"
             onAction={() => controller.current?.abort()}
           />
+          {switchActions?.(formValues.sense || undefined)}
         </ActionPanel>
       }
     >
@@ -409,7 +482,11 @@ function CandidateReview({
   provider,
   model,
   direct = false,
+  switchAction,
+  onChangeOptions,
 }: {
+  switchAction?: React.ReactElement;
+  onChangeOptions?: () => void;
   result: AIResult;
   word?: Word;
   group?: Group;
@@ -508,6 +585,10 @@ function CandidateReview({
   const common = (
     <>
       <Action title="Save Selected Candidates" onAction={save} />
+      {!busy && switchAction}
+      {!busy && onChangeOptions && (
+        <Action title="Change Generation Options" onAction={onChangeOptions} />
+      )}
       {task === "senses" && (
         <Action
           title={
