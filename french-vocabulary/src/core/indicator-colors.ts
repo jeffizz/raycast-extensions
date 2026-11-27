@@ -4,6 +4,7 @@ export const defaultIndicatorColors = Object.freeze({
   collocations: "#29b8a5",
   mnemonic: "#ed9854",
   multiple: "#e879bd",
+  chat: "#86868b",
 });
 export type IndicatorColors = {
   -readonly [K in keyof typeof defaultIndicatorColors]: string;
@@ -14,6 +15,7 @@ export const indicatorLabels: Record<keyof IndicatorColors, string> = {
   collocations: "Collocations",
   mnemonic: "Mnemonic",
   multiple: "Multiple Content Types",
+  chat: "Word Chat History",
 };
 export const indicatorKeys = Object.keys(
   defaultIndicatorColors,
@@ -23,6 +25,8 @@ export function parseIndicatorColors(value: unknown): IndicatorColors {
     throw Error("Invalid indicator colours.");
   const result = { ...defaultIndicatorColors } as IndicatorColors;
   for (const key of indicatorKeys) {
+    // Older palettes predate the chat indicator.
+    if (key === "chat" && !Object.hasOwn(value, key)) continue;
     const color = (value as Record<string, unknown>)[key];
     if (typeof color !== "string" || !/^#[0-9a-f]{6}$/i.test(color.trim()))
       throw Error(

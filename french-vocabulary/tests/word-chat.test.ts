@@ -114,6 +114,20 @@ test("SQLite keeps unlimited per-word turns, pages history, and prevents late wr
   }
   const id = await db.start(key, "Pending", "");
   await db.start({ ...key, libraryId: "other" }, "Separate library", "");
+  const pendingOnly = { ...key, wordId: "pending-only" };
+  await db.start(pendingOnly, "Unanswered question", "");
+  assert.deepEqual(
+    await other.wordsWithHistory(key.libraryId, [
+      key.wordId,
+      pendingOnly.wordId,
+      "missing",
+    ]),
+    [key.wordId, pendingOnly.wordId],
+  );
+  assert.deepEqual(
+    await other.wordsWithHistory("missing-library", [key.wordId]),
+    [],
+  );
   const page = await other.page(key);
   assert.equal(page.length, 20);
   assert.equal(page[0].answer, null);
@@ -124,6 +138,10 @@ test("SQLite keeps unlimited per-word turns, pages history, and prevents late wr
   );
   assert.equal((await other.page(key, undefined, true)).length, 9);
   await db.clear(key);
+  assert.deepEqual(
+    await other.wordsWithHistory(key.libraryId, [key.wordId]),
+    [],
+  );
   await assert.rejects(other.finish(key, id, "Late reply"));
   assert.deepEqual(await other.page(key), []);
   assert.equal((await other.page({ ...key, libraryId: "other" })).length, 1);

@@ -33,6 +33,36 @@ test("colour previews reuse real row SVGs without modifying the active palette",
   assert.deepEqual(indicatorColors(), before);
   assert.throws(() => renderStatusIcon("fuzzy", 'red" onload="x'));
 });
+test("chat and enrichment use one outline with a separate familiarity glyph", () => {
+  for (const state of ["unmarked", "fuzzy", "known"] as const) {
+    const svg = (color: string | undefined, multiple: boolean, chat: boolean) =>
+      Buffer.from(
+        renderStatusIcon(state, color, multiple, chat)!.split(",")[1],
+        "base64",
+      ).toString();
+    assert.doesNotMatch(svg("#123456", false, false), /cx="13.8"/);
+    assert.match(
+      svg("#123456", false, true),
+      /r="7".*cx="13.8" cy="2.2" r="1.85" fill="#86868b"/,
+    );
+    const flower = svg("#123456", true, true);
+    assert.equal((flower.match(/ A5 5 /g) ?? []).length, 4);
+    assert.match(flower, /mask="url\(#chat-gap\)"/);
+    assert.equal((flower.match(/<circle/g) ?? []).length, 2);
+    assert.notEqual(
+      renderStatusIcon(state, undefined, false, true, "#000000"),
+      renderStatusIcon(state, undefined, false, true, "#86868b"),
+    );
+    const bubble = svg(undefined, false, true);
+    assert.match(bubble, /L3.5 15/);
+    assert.doesNotMatch(bubble, /<circle/);
+    if (state === "known") assert.match(bubble, /#54bd76.*M4 8l3 3 6-7/);
+    if (state === "fuzzy") assert.match(bubble, /#f5a623.*M5 5a3 3/);
+    if (state === "unmarked")
+      assert.equal((bubble.match(/<path/g) ?? []).length, 1);
+  }
+});
+
 test("picker separates browsing, confirmation, defaults and explicit persistence", () => {
   const source = readFileSync(
     new URL("../src/components/indicator-colors.tsx", import.meta.url),
@@ -50,11 +80,11 @@ test("picker separates browsing, confirmation, defaults and explicit persistence
   assert.equal((source.match(/await saveIndicatorColors\(/g) ?? []).length, 1);
   for (const label of [
     "Circle",
-    "Circle + Question Mark",
-    "Circle + Checkmark",
+    " + Question Mark",
+    " + Checkmark",
     "Custom HEX",
     "Save All Colours",
   ])
     assert.ok(source.includes(label));
-  assert.ok(source.includes("renderStatusIcon(state, color)"));
+  assert.ok(source.includes("renderStatusIcon(state, color, multiple)"));
 });

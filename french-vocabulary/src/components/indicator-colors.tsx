@@ -40,32 +40,107 @@ const presets = [
   ["Purple", "#a78bfa"],
   ["Indigo", "#818cf8"],
   ["Slate", "#94a3b8"],
+  ["Black", "#000000"],
+  ["Charcoal", "#404040"],
   ["Grey", "#a3a3a3"],
+  ["Light Grey", "#d4d4d4"],
   ["White", "#eeeeee"],
 ] as const;
 
-function ColourPreview({ color }: { color: string }) {
+function colourSwatch(color: string, multiple: boolean, chat: boolean) {
+  return chat
+    ? renderStatusIcon("unmarked", undefined, false, true, color)
+    : renderStatusIcon("unmarked", color, multiple);
+}
+
+function ColourPreview({
+  color,
+  multiple,
+  chat,
+  palette,
+}: {
+  color: string;
+  multiple: boolean;
+  chat: boolean;
+  palette: IndicatorColors;
+}) {
+  const outline = multiple ? "Four-Circle Outline" : "Circle";
   return (
     <List.Item.Detail
       markdown={
-        "# Indicator Preview\n\nChoose a colour on the left. These are the actual list icons, rendered at their native size. The question mark and checkmark retain their familiarity colours.\n\nPreviewing does not save or apply changes."
+        "# Indicator Preview\n\nA solid dot marks saved Word Chat history when an enrichment outline is present. Otherwise, chat history uses a speech bubble. Familiarity colours stay unchanged.\n\nPreviewing does not save or apply changes."
       }
       metadata={
         <List.Item.Detail.Metadata>
           {(
             [
-              ["unmarked", "Circle"],
-              ["fuzzy", "Circle + Question Mark"],
-              ["known", "Circle + Checkmark"],
+              ["unmarked", ""],
+              ["fuzzy", " + Question Mark"],
+              ["known", " + Checkmark"],
             ] as const
-          ).map(([state, label]) => (
-            <List.Item.Detail.Metadata.Label
-              key={state}
-              title={label}
-              text=""
-              icon={renderStatusIcon(state, color)!}
-            />
-          ))}
+          ).flatMap(([state, suffix]) =>
+            chat
+              ? [
+                  <List.Item.Detail.Metadata.Label
+                    key={state}
+                    title={"Speech Bubble" + suffix}
+                    text=""
+                    icon={renderStatusIcon(
+                      state,
+                      undefined,
+                      false,
+                      true,
+                      color,
+                    )!}
+                  />,
+                ]
+              : [
+                  <List.Item.Detail.Metadata.Label
+                    key={state}
+                    title={outline + suffix}
+                    text=""
+                    icon={renderStatusIcon(state, color, multiple)!}
+                  />,
+                  <List.Item.Detail.Metadata.Label
+                    key={state + "-chat"}
+                    title={outline + suffix + " + Word Chat"}
+                    text=""
+                    icon={renderStatusIcon(
+                      state,
+                      color,
+                      multiple,
+                      true,
+                      palette.chat,
+                    )!}
+                  />,
+                ],
+          )}
+          {chat && (
+            <>
+              <List.Item.Detail.Metadata.Label
+                title="Circle + Word Chat"
+                text=""
+                icon={renderStatusIcon(
+                  "fuzzy",
+                  palette.examples,
+                  false,
+                  true,
+                  color,
+                )!}
+              />
+              <List.Item.Detail.Metadata.Label
+                title="Four-Circle Outline + Word Chat"
+                text=""
+                icon={renderStatusIcon(
+                  "known",
+                  palette.multiple,
+                  true,
+                  true,
+                  color,
+                )!}
+              />
+            </>
+          )}
         </List.Item.Detail.Metadata>
       }
     />
@@ -118,6 +193,9 @@ function ColourSettings({
       <ColourPicker
         title={indicatorLabels[key]}
         current={draft[key]}
+        multiple={key === "multiple"}
+        chat={key === "chat"}
+        palette={draft}
         onChoose={(color) =>
           setDraft((previous) => ({ ...previous, [key]: color }))
         }
@@ -144,7 +222,7 @@ function ColourSettings({
           <List.Item
             key={key}
             title={indicatorLabels[key]}
-            icon={{ source: Icon.Circle, tintColor: draft[key] }}
+            icon={colourSwatch(draft[key], key === "multiple", key === "chat")}
             accessories={[
               {
                 icon:
@@ -155,7 +233,14 @@ function ColourSettings({
                     : "Saved colour",
               },
             ]}
-            detail={<ColourPreview color={draft[key]} />}
+            detail={
+              <ColourPreview
+                color={draft[key]}
+                multiple={key === "multiple"}
+                chat={key === "chat"}
+                palette={draft}
+              />
+            }
             actions={
               <ActionPanel>
                 <Action title="Choose Colour" onAction={() => choose(key)} />
@@ -171,10 +256,16 @@ function ColourSettings({
 function ColourPicker({
   title,
   current,
+  multiple,
+  chat,
+  palette,
   onChoose,
 }: {
   title: string;
   current: string;
+  multiple: boolean;
+  chat: boolean;
+  palette: IndicatorColors;
   onChoose: (color: string) => void;
 }) {
   const { pop, push } = useNavigation();
@@ -223,13 +314,20 @@ function ColourPicker({
           key={option.value}
           id={option.value}
           title={option.name}
-          icon={{ source: Icon.Circle, tintColor: option.value }}
+          icon={colourSwatch(option.value, multiple, chat)}
           accessories={
             option.value === current
               ? [{ icon: Icon.Checkmark, tooltip: "Current draft colour" }]
               : []
           }
-          detail={<ColourPreview color={option.value} />}
+          detail={
+            <ColourPreview
+              color={option.value}
+              multiple={multiple}
+              chat={chat}
+              palette={palette}
+            />
+          }
           actions={
             <ActionPanel>
               <Action

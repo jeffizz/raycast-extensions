@@ -62,6 +62,7 @@ import { autoBackup, preferences, report, store, useLibrary } from "./runtime";
 import { prepareSpeech, speakTexts, speakWord, stopSpeech } from "./speech";
 import { escapeMD } from "./components/word";
 import { contentAccessories } from "./components/content-status";
+import { useChatPresence } from "./ai/use-chat-presence";
 import {
   translations,
   sessionTranslationLanguage,
@@ -763,6 +764,12 @@ function ActivePracticeSession({
   const working = useRef(false),
     { push, pop } = useNavigation();
   const window = practiceWindow(index, queue.length);
+  const chatPresence = useChatPresence(
+    sessionLibraryId,
+    challenge
+      ? []
+      : queue.slice(window.start, window.end).map(({ word }) => word.id),
+  );
   const submissionVersion = useRef(0);
   const current = queue[index];
   const q =
@@ -1454,7 +1461,7 @@ function ActivePracticeSession({
                         },
                       ]
                     : []),
-                  ...contentAccessories(word),
+                  ...contentAccessories(word, chatPresence?.has(word.id)),
                 ]}
                 icon={
                   i < index

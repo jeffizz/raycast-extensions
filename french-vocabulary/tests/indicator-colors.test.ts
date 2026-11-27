@@ -23,6 +23,13 @@ test("palette validates complete six-digit HEX mappings and rejects SVG injectio
       parseIndicatorColors({ ...defaultIndicatorColors, examples: value }),
     );
   }
+  const { chat, ...legacy } = defaultIndicatorColors;
+  assert.equal(
+    parseIndicatorColors({ ...legacy, examples: "#123456" }).examples,
+    "#123456",
+  );
+  assert.equal(parseIndicatorColors(legacy).chat, chat);
+  assert.throws(() => parseIndicatorColors({ ...legacy, chat: null }));
   assert.throws(() => parseIndicatorColors({}));
 });
 test("custom rings invalidate cached SVGs while the smaller question mark leaves circle geometry unchanged", () => {

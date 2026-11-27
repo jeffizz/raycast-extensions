@@ -21,8 +21,11 @@ const svg = (word: ReturnType<typeof sample>) =>
 
 test("status indicators are the final accessory in every vocabulary surface", () => {
   for (const [path, marker] of [
-    ["browse.tsx", "...contentAccessories(w),"],
-    ["practice.tsx", "...contentAccessories(word),"],
+    ["browse.tsx", "...contentAccessories(w, chatPresence?.has(w.id)),"],
+    [
+      "practice.tsx",
+      "...contentAccessories(word, chatPresence?.has(word.id)),",
+    ],
   ]) {
     const source = read(path);
     const start = source.indexOf(marker);
@@ -127,6 +130,6 @@ test("family cache capacity and shared rendering remain wired correctly", () => 
   }
   assert.ok(!read("components/word.tsx").includes("practiceShortcut"));
   const accessory = read("components/content-status.ts");
-  assert.ok(accessory.includes("statusIcon(word)"));
-  assert.ok(accessory.includes("statusTooltip(word)"));
+  assert.ok(accessory.includes("statusIcon(word, hasChat)"));
+  assert.ok(accessory.includes("statusTooltip(word, hasChat)"));
 });

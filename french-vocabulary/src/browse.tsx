@@ -42,6 +42,7 @@ import { PracticeSession } from "./practice";
 import { copyQuestionsInOrder } from "./core/learning";
 import { modeSettings } from "./core/practice-settings";
 import { contentAccessories } from "./components/content-status";
+import { useChatPresence } from "./ai/use-chat-presence";
 import {
   ProcessingSession,
   startProcessing,
@@ -395,6 +396,10 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
       ? selectedRow
       : rows.find((row) => row.word.id === activeId)?.id;
   const visibleRows = rows.slice(0, visibleCount);
+  const chatPresence = useChatPresence(
+    lib.libraryId,
+    visibleRows.map(({ word }) => word.id),
+  );
   useEffect(() => {
     setVisibleCount(80);
   }, [query, filter, sort, recentErrors, collectionId, globalSearch]);
@@ -528,7 +533,7 @@ export function VocabularyList({ archived = false }: { archived?: boolean }) {
       ...(!listLayout && pos === "right"
         ? [{ text: w.senses[0]?.pos ?? "" }]
         : []),
-      ...contentAccessories(w),
+      ...contentAccessories(w, chatPresence?.has(w.id)),
     ];
   };
   return (

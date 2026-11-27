@@ -26,6 +26,22 @@ ON CONFLICT(library,word) DO UPDATE SET revision=excluded.revision;`;
 
 export class WordChatStore {
   private ready?: Promise<void>;
+  private presenceRevision = 0;
+  private readonly presenceListeners = new Set<() => void>();
+
+  getPresenceRevision = () => this.presenceRevision;
+
+  subscribeToPresence = (listener: () => void) => {
+    this.presenceListeners.add(listener);
+    return () => {
+      this.presenceListeners.delete(listener);
+    };
+  };
+
+  private notifyPresence() {
+    this.presenceRevision++;
+    for (const listener of this.presenceListeners) listener();
+  }
   private readonly path: string;
 
   constructor(private readonly root: string) {
@@ -82,6 +98,7 @@ export class WordChatStore {
     await this.query(`BEGIN IMMEDIATE;
       INSERT INTO turns(library,word,id,question,sense) VALUES(${scope(k)},${sql(id)},${sql(question)},${sql(sense)});
       ${touch(k)} COMMIT;`);
+    this.notifyPresence();
     return id;
   }
 
@@ -103,6 +120,7 @@ export class WordChatStore {
   async clear(k: ChatKey) {
     await this.query(`PRAGMA secure_delete=ON; BEGIN IMMEDIATE;
       DELETE FROM turns WHERE ${key(k)}; ${touch(k)} COMMIT;`);
+    this.notifyPresence();
   }
 
   async pending(libraryId: string, target: string): Promise<string[]> {
@@ -152,6 +170,21 @@ export class WordChatStore {
       ${snapshot.turns.map((t) => `INSERT INTO turns(library,word,id,question,answer,sense) VALUES(${scope(snapshot)},${sql(t.id)},${sql(t.question)},${t.answer === null ? "NULL" : sql(t.answer)},${sql(t.sense)});`).join("\n")}
       INSERT INTO backups VALUES(${scope(snapshot)},${sql(target)},${sql(snapshot.revision)},${sql(etag)});
       COMMIT;`);
+    this.notifyPresence();
+  }
+
+  async wordsWithHistory(
+    libraryId: string,
+    ids: readonly string[],
+  ): Promise<string[]> {
+    if (!ids.length) return [];
+    const rows = JSON.parse(
+      (await this
+        .query(`SELECT value AS word FROM json_each(${sql(JSON.stringify(ids))}) AS requested
+        WHERE EXISTS (SELECT 1 FROM turns WHERE library=${sql(libraryId)} AND word=requested.value);`)) ||
+        "[]",
+    ) as { word: string }[];
+    return rows.map(({ word }) => word);
   }
 
   async exists(k: ChatKey) {
