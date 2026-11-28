@@ -88,9 +88,10 @@ Raycast's approximately 100 MB extension heap limit is a practical constraint.
   Inspect installed types when unsure. Keep loading, error, cancellation and empty states useful.
 - Familiarity and enrichment share ONE SVG accessory slot, always the rightmost accessory.
   Ratings, POS and archive badges precede it across Browse/archive, Practice layouts and group details.
-  Ring colours are locally configurable; multiple content types use the exterior outline of four overlapping circles.
+  Ring colours are locally configurable; multiple content types use a rounded diamond outline.
   Browse and Practice combine Word Chat into the same SVG: a solid corner dot with transparent clearance,
   or a speech bubble around the familiarity glyph when no enrichment is present. Both use the same local colour.
+  Status tooltips list familiarity and enrichment only; the chat shape is its own indicator.
   Fetch chat presence in batches for rendered rows only, never load transcripts or index all chat IDs.
   Candidate statuses use compact icons/tooltips rather than long text squeezing list rows.
 - Translation order/visibility is persistent per relevant surface; respect English Only.

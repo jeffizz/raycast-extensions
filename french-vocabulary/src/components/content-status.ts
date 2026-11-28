@@ -7,7 +7,5 @@ export function contentAccessories(
   hasChat = false,
 ): List.Item.Accessory[] {
   const source = statusIcon(word, hasChat);
-  return source
-    ? [{ icon: { source }, tooltip: statusTooltip(word, hasChat) }]
-    : [];
+  return source ? [{ icon: { source }, tooltip: statusTooltip(word) }] : [];
 }

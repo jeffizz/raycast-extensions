@@ -64,7 +64,7 @@ function ColourPreview({
   chat: boolean;
   palette: IndicatorColors;
 }) {
-  const outline = multiple ? "Four-Circle Outline" : "Circle";
+  const outline = multiple ? "Rounded Diamond" : "Circle";
   return (
     <List.Item.Detail
       markdown={
@@ -129,7 +129,7 @@ function ColourPreview({
                 )!}
               />
               <List.Item.Detail.Metadata.Label
-                title="Four-Circle Outline + Word Chat"
+                title="Rounded Diamond + Word Chat"
                 text=""
                 icon={renderStatusIcon(
                   "known",

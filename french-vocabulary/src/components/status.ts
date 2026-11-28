@@ -72,10 +72,9 @@ export function renderStatusIcon(
       : state === "known"
         ? '<path d="M4 8l3 3 6-7"/>'
         : "";
-  // Keep only the four exterior arcs of the overlapping circles, leaving the centre clear.
   const outline = ringColor
     ? multiple
-      ? `<path d="M3.61 3.61 A5 5 0 0 1 12.39 3.61 A5 5 0 0 1 12.39 12.39 A5 5 0 0 1 3.61 12.39 A5 5 0 0 1 3.61 3.61 Z" fill="none" stroke="${ringColor}" stroke-width="1.2" stroke-linejoin="round"/>`
+      ? `<path d="M7.15 1.15 Q8 .3 8.85 1.15 L14.85 7.15 Q15.7 8 14.85 8.85 L8.85 14.85 Q8 15.7 7.15 14.85 L1.15 8.85 Q.3 8 1.15 7.15 Z" fill="none" stroke="${ringColor}" stroke-width="1.2" stroke-linejoin="round"/>`
       : `<circle cx="8" cy="8" r="7" fill="none" stroke="${ringColor}" stroke-width="1.2"/>`
     : hasChat
       ? `<path d="M4.5 1.5H11.5Q15 1.5 15 5V9.5Q15 13 11.5 13H7L3.5 15V12.9Q1 12.3 1 9.5V5Q1 1.5 4.5 1.5Z" fill="none" stroke="${chatInk}" stroke-width="1.1" stroke-linejoin="round"/>`
@@ -90,7 +89,7 @@ export function renderStatusIcon(
     : outline;
   const glyphOffset =
     multiple && ringColor
-      ? ' transform="translate(8 8) scale(0.82) translate(-8 -8)"'
+      ? ' transform="translate(8 8) scale(0.72) translate(-8 -8)"'
       : hasChat && !ringColor
         ? ' transform="translate(0 -0.65)"'
         : "";
@@ -100,16 +99,12 @@ export function renderStatusIcon(
   cache.set(key, uri);
   return uri;
 }
-export function statusTooltip(word: Word, hasChat = false) {
+export function statusTooltip(word: Word) {
   const familiarity =
     word.familiarity === "known"
       ? "Know"
       : ["fuzzy", "unknown"].includes(word.familiarity)
         ? "Fuzzy"
         : "Unmarked";
-  return [
-    familiarity,
-    ...enrichmentStatus(word).details,
-    ...(hasChat ? ["Word Chat History"] : []),
-  ].join("\n");
+  return [familiarity, ...enrichmentStatus(word).details].join("\n");
 }

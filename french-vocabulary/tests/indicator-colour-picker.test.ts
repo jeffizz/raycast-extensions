@@ -45,10 +45,10 @@ test("chat and enrichment use one outline with a separate familiarity glyph", ()
       svg("#123456", false, true),
       /r="7".*cx="13.8" cy="2.2" r="1.85" fill="#86868b"/,
     );
-    const flower = svg("#123456", true, true);
-    assert.equal((flower.match(/ A5 5 /g) ?? []).length, 4);
-    assert.match(flower, /mask="url\(#chat-gap\)"/);
-    assert.equal((flower.match(/<circle/g) ?? []).length, 2);
+    const diamond = svg("#123456", true, true);
+    assert.match(diamond, /M7\.15 1\.15 Q8 \.3 8\.85 1\.15 L14\.85 7\.15/);
+    assert.match(diamond, /mask="url\(#chat-gap\)"/);
+    assert.equal((diamond.match(/<circle/g) ?? []).length, 2);
     assert.notEqual(
       renderStatusIcon(state, undefined, false, true, "#000000"),
       renderStatusIcon(state, undefined, false, true, "#86868b"),

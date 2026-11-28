@@ -131,5 +131,5 @@ test("family cache capacity and shared rendering remain wired correctly", () => 
   assert.ok(!read("components/word.tsx").includes("practiceShortcut"));
   const accessory = read("components/content-status.ts");
   assert.ok(accessory.includes("statusIcon(word, hasChat)"));
-  assert.ok(accessory.includes("statusTooltip(word, hasChat)"));
+  assert.ok(accessory.includes("statusTooltip(word)"));
 });
