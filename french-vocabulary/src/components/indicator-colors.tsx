@@ -12,6 +12,9 @@ import { showFailureToast, useForm, usePromise } from "@raycast/utils";
 import { useRef, useState } from "react";
 import {
   defaultIndicatorColors,
+  diamondRoundnessOptions,
+  type DiamondRoundness,
+  type IndicatorColourKey,
   indicatorKeys,
   indicatorLabels,
   IndicatorColors,
@@ -47,10 +50,22 @@ const presets = [
   ["White", "#eeeeee"],
 ] as const;
 
-function colourSwatch(color: string, multiple: boolean, chat: boolean) {
+function colourSwatch(
+  color: string,
+  multiple: boolean,
+  chat: boolean,
+  palette: IndicatorColors,
+) {
   return chat
     ? renderStatusIcon("unmarked", undefined, false, true, color)
-    : renderStatusIcon("unmarked", color, multiple);
+    : renderStatusIcon(
+        "unmarked",
+        color,
+        multiple,
+        false,
+        palette.chat,
+        palette.diamondRoundness,
+      );
 }
 
 function ColourPreview({
@@ -99,7 +114,14 @@ function ColourPreview({
                     key={state}
                     title={outline + suffix}
                     text=""
-                    icon={renderStatusIcon(state, color, multiple)!}
+                    icon={renderStatusIcon(
+                      state,
+                      color,
+                      multiple,
+                      false,
+                      palette.chat,
+                      palette.diamondRoundness,
+                    )!}
                   />,
                   <List.Item.Detail.Metadata.Label
                     key={state + "-chat"}
@@ -111,6 +133,7 @@ function ColourPreview({
                       multiple,
                       true,
                       palette.chat,
+                      palette.diamondRoundness,
                     )!}
                   />,
                 ],
@@ -137,6 +160,7 @@ function ColourPreview({
                   true,
                   true,
                   color,
+                  palette.diamondRoundness,
                 )!}
               />
             </>
@@ -188,7 +212,7 @@ function ColourSettings({
       setBusy(false);
     }
   };
-  const choose = (key: keyof IndicatorColors) =>
+  const choose = (key: IndicatorColourKey) =>
     push(
       <ColourPicker
         title={indicatorLabels[key]}
@@ -218,37 +242,71 @@ function ColourSettings({
       actions={<ActionPanel>{common}</ActionPanel>}
     >
       <List.Section title="Choose a content type · Changes remain a draft until saved">
-        {indicatorKeys.map((key) => (
-          <List.Item
-            key={key}
-            title={indicatorLabels[key]}
-            icon={colourSwatch(draft[key], key === "multiple", key === "chat")}
-            accessories={[
-              {
-                icon:
-                  draft[key] !== initial[key] ? Icon.Pencil : Icon.Checkmark,
-                tooltip:
-                  draft[key] !== initial[key]
-                    ? "Unsaved colour change"
-                    : "Saved colour",
-              },
-            ]}
-            detail={
-              <ColourPreview
-                color={draft[key]}
-                multiple={key === "multiple"}
-                chat={key === "chat"}
-                palette={draft}
-              />
-            }
-            actions={
-              <ActionPanel>
-                <Action title="Choose Colour" onAction={() => choose(key)} />
-                {common}
-              </ActionPanel>
-            }
-          />
-        ))}
+        {indicatorKeys.map((key) => {
+          const changed =
+            draft[key] !== initial[key] ||
+            (key === "multiple" &&
+              draft.diamondRoundness !== initial.diamondRoundness);
+          return (
+            <List.Item
+              key={key}
+              title={indicatorLabels[key]}
+              icon={colourSwatch(
+                draft[key],
+                key === "multiple",
+                key === "chat",
+                draft,
+              )}
+              subtitle={
+                key === "multiple"
+                  ? diamondRoundnessOptions[draft.diamondRoundness]
+                  : undefined
+              }
+              accessories={[
+                {
+                  icon: changed ? Icon.Pencil : Icon.Checkmark,
+                  tooltip: changed
+                    ? "Unsaved indicator changes"
+                    : "Saved indicator settings",
+                },
+              ]}
+              detail={
+                <ColourPreview
+                  color={draft[key]}
+                  multiple={key === "multiple"}
+                  chat={key === "chat"}
+                  palette={draft}
+                />
+              }
+              actions={
+                <ActionPanel>
+                  <Action title="Choose Colour" onAction={() => choose(key)} />
+                  {key === "multiple" && (
+                    <ActionPanel.Submenu title="Choose Corner Roundness">
+                      {(
+                        Object.keys(
+                          diamondRoundnessOptions,
+                        ) as DiamondRoundness[]
+                      ).map((roundness) => (
+                        <Action
+                          key={roundness}
+                          title={diamondRoundnessOptions[roundness]}
+                          onAction={() =>
+                            setDraft((previous) => ({
+                              ...previous,
+                              diamondRoundness: roundness,
+                            }))
+                          }
+                        />
+                      ))}
+                    </ActionPanel.Submenu>
+                  )}
+                  {common}
+                </ActionPanel>
+              }
+            />
+          );
+        })}
       </List.Section>
     </List>
   );
@@ -314,7 +372,7 @@ function ColourPicker({
           key={option.value}
           id={option.value}
           title={option.name}
-          icon={colourSwatch(option.value, multiple, chat)}
+          icon={colourSwatch(option.value, multiple, chat, palette)}
           accessories={
             option.value === current
               ? [{ icon: Icon.Checkmark, tooltip: "Current draft colour" }]

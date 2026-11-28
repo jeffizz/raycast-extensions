@@ -46,7 +46,7 @@ test("chat and enrichment use one outline with a separate familiarity glyph", ()
       /r="7".*cx="13.8" cy="2.2" r="1.85" fill="#86868b"/,
     );
     const diamond = svg("#123456", true, true);
-    assert.match(diamond, /M7\.15 1\.15 Q8 \.3 8\.85 1\.15 L14\.85 7\.15/);
+    assert.match(diamond, /M6\.4 1\.9 Q8 \.3 9\.6 1\.9 L14\.1 6\.4/);
     assert.match(diamond, /mask="url\(#chat-gap\)"/);
     assert.equal((diamond.match(/<circle/g) ?? []).length, 2);
     assert.notEqual(
@@ -60,6 +60,16 @@ test("chat and enrichment use one outline with a separate familiarity glyph", ()
     if (state === "fuzzy") assert.match(bubble, /#f5a623.*M5 5a3 3/);
     if (state === "unmarked")
       assert.equal((bubble.match(/<path/g) ?? []).length, 1);
+  }
+});
+
+test("roundness presets change only the multiple-content outline", () => {
+  const levels = ["subtle", "medium", "soft"] as const;
+  for (const multiple of [false, true]) {
+    const images = levels.map((level) =>
+      renderStatusIcon("known", "#123456", multiple, true, "#86868b", level),
+    );
+    assert.equal(new Set(images).size, multiple ? 3 : 1);
   }
 });
 
@@ -86,5 +96,6 @@ test("picker separates browsing, confirmation, defaults and explicit persistence
     "Save All Colours",
   ])
     assert.ok(source.includes(label));
-  assert.ok(source.includes("renderStatusIcon(state, color, multiple)"));
+  assert.ok(source.includes("palette.diamondRoundness"));
+  assert.ok(source.includes('title="Choose Corner Roundness"'));
 });

@@ -1,6 +1,16 @@
-import { indicatorColors } from "../core/indicator-colors";
+import {
+  type DiamondRoundness,
+  indicatorColors,
+} from "../core/indicator-colors";
 import { Word } from "../core/model";
 const cache = new Map<string, string>();
+const diamondPaths: Record<DiamondRoundness, string> = {
+  subtle:
+    "M6.8 1.5 Q8 .3 9.2 1.5 L14.5 6.8 Q15.7 8 14.5 9.2 L9.2 14.5 Q8 15.7 6.8 14.5 L1.5 9.2 Q.3 8 1.5 6.8 Z",
+  medium:
+    "M6.4 1.9 Q8 .3 9.6 1.9 L14.1 6.4 Q15.7 8 14.1 9.6 L9.6 14.1 Q8 15.7 6.4 14.1 L1.9 9.6 Q.3 8 1.9 6.4 Z",
+  soft: "M5.9 2.4 Q8 .3 10.1 2.4 L13.6 5.9 Q15.7 8 13.6 10.1 L10.1 13.6 Q8 15.7 5.9 13.6 L2.4 10.1 Q.3 8 2.4 5.9 Z",
+};
 export function enrichmentStatus(word: Word) {
   const colors = indicatorColors();
   const types = [
@@ -57,13 +67,14 @@ export function renderStatusIcon(
   multiple = false,
   hasChat = false,
   chatInk = indicatorColors().chat,
+  roundness = indicatorColors().diamondRoundness,
 ): string | undefined {
   if (ringColor && !/^#[0-9a-f]{6}$/i.test(ringColor))
     throw Error("Invalid ring colour.");
   if (!ringColor && !hasChat && state !== "fuzzy" && state !== "known") return;
   if (hasChat && !/^#[0-9a-f]{6}$/i.test(chatInk))
     throw Error("Invalid chat colour.");
-  const key = `${state}:${ringColor ?? ""}:${multiple}:${hasChat ? chatInk : ""}`;
+  const key = `${state}:${ringColor ?? ""}:${multiple ? roundness : ""}:${hasChat ? chatInk : ""}`;
   if (cache.has(key)) return cache.get(key);
   const color = state === "fuzzy" ? "#f5a623" : "#54bd76";
   const symbol =
@@ -74,7 +85,7 @@ export function renderStatusIcon(
         : "";
   const outline = ringColor
     ? multiple
-      ? `<path d="M7.15 1.15 Q8 .3 8.85 1.15 L14.85 7.15 Q15.7 8 14.85 8.85 L8.85 14.85 Q8 15.7 7.15 14.85 L1.15 8.85 Q.3 8 1.15 7.15 Z" fill="none" stroke="${ringColor}" stroke-width="1.2" stroke-linejoin="round"/>`
+      ? `<path d="${diamondPaths[roundness]}" fill="none" stroke="${ringColor}" stroke-width="1.2" stroke-linejoin="round"/>`
       : `<circle cx="8" cy="8" r="7" fill="none" stroke="${ringColor}" stroke-width="1.2"/>`
     : hasChat
       ? `<path d="M4.5 1.5H11.5Q15 1.5 15 5V9.5Q15 13 11.5 13H7L3.5 15V12.9Q1 12.3 1 9.5V5Q1 1.5 4.5 1.5Z" fill="none" stroke="${chatInk}" stroke-width="1.1" stroke-linejoin="round"/>`

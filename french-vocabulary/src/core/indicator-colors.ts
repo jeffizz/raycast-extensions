@@ -1,15 +1,27 @@
-export const defaultIndicatorColors = Object.freeze({
+export const diamondRoundnessOptions = {
+  subtle: "Subtle",
+  medium: "Medium",
+  soft: "Soft",
+} as const;
+export type DiamondRoundness = keyof typeof diamondRoundnessOptions;
+
+const colourDefaults = {
   examples: "#52a8ff",
   family: "#a78bfa",
   collocations: "#29b8a5",
   mnemonic: "#ed9854",
   multiple: "#e879bd",
   chat: "#86868b",
-});
-export type IndicatorColors = {
-  -readonly [K in keyof typeof defaultIndicatorColors]: string;
 };
-export const indicatorLabels: Record<keyof IndicatorColors, string> = {
+export const defaultIndicatorColors = Object.freeze({
+  ...colourDefaults,
+  diamondRoundness: "medium" as DiamondRoundness,
+});
+export type IndicatorColourKey = keyof typeof colourDefaults;
+export type IndicatorColors = {
+  [K in IndicatorColourKey]: string;
+} & { diamondRoundness: DiamondRoundness };
+export const indicatorLabels: Record<IndicatorColourKey, string> = {
   examples: "Examples",
   family: "Word Family",
   collocations: "Collocations",
@@ -18,8 +30,8 @@ export const indicatorLabels: Record<keyof IndicatorColors, string> = {
   chat: "Word Chat History",
 };
 export const indicatorKeys = Object.keys(
-  defaultIndicatorColors,
-) as (keyof IndicatorColors)[];
+  colourDefaults,
+) as IndicatorColourKey[];
 export function parseIndicatorColors(value: unknown): IndicatorColors {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw Error("Invalid indicator colours.");
@@ -34,6 +46,9 @@ export function parseIndicatorColors(value: unknown): IndicatorColors {
       );
     result[key] = color.trim().toLowerCase();
   }
+  const roundness = (value as Record<string, unknown>).diamondRoundness;
+  if (roundness === "subtle" || roundness === "medium" || roundness === "soft")
+    result.diamondRoundness = roundness;
   return result;
 }
 let current: IndicatorColors = { ...defaultIndicatorColors };
