@@ -41,6 +41,7 @@ export function WordChatView({
   senseId?: string;
 }) {
   const [historyHidden, setHistoryHidden] = useState(false);
+  const [showQuestion, setShowQuestion] = useState(false);
   const {
     value: savedHistoryWindow,
     setValue: setHistoryWindow,
@@ -268,7 +269,21 @@ export function WordChatView({
         />
       )}
       {turn && (
-        <Action.CopyToClipboard title="Copy Question" content={turn.question} />
+        <>
+          <Action
+            title={
+              showQuestion
+                ? "Hide Question and Sense"
+                : "Show Question and Sense"
+            }
+            icon={showQuestion ? Icon.EyeDisabled : Icon.Eye}
+            onAction={() => setShowQuestion((value) => !value)}
+          />
+          <Action.CopyToClipboard
+            title="Copy Question"
+            content={turn.question}
+          />
+        </>
       )}
       {turn?.answer && (
         <Action.CopyToClipboard title="Copy Answer" content={turn.answer} />
@@ -307,8 +322,17 @@ export function WordChatView({
       {!busy && switchAction}
     </ActionPanel>
   );
-  const turnMarkdown = (turn: ChatTurn) =>
-    `### Question\n\n${md(turn.question)}${turn.sense ? "\n\n**Sense:** " + md(turn.sense) : ""}\n\n### Answer\n\n${turn.answer?.replace(/!\[/g, "[") ?? "No reply saved. Retry this question from Actions."}`;
+  const turnMarkdown = (turn: ChatTurn) => {
+    const answer =
+      turn.answer?.replace(/!\[/g, "[") ??
+      "No reply saved. Retry this question from Actions.";
+    if (!showQuestion) return answer;
+
+    const context = [word.word, ...turn.sense.split(" · ").filter(Boolean)]
+      .map((part) => md(part.replace(/\s+/g, " ")))
+      .join(" · ");
+    return `${md(turn.question)}\n\n> ${context}\n\n---\n\n${answer}`;
+  };
   const renderTurn = (turn: ChatTurn) => (
     <List.Item
       key={turn.id}
